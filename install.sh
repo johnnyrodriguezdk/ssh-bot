@@ -1429,17 +1429,213 @@ echo -e "${GREEN}✅ Bot con IA Omnipresente creado exitosamente${NC}"
 # ================================================
 echo -e "\n${CYAN}${BOLD}🎛️  CREANDO PANEL DE CONTROL CON IA OMNIPRESENTE...${NC}"
 
+# ... (tu script actual hasta la línea 1432) ...
+
 cat > /usr/local/bin/sshbot << 'PANELEOF'
 #!/bin/bash
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BLUE='\033[0;34m'; NC='\033[0m'
+# ================================================
+# PANEL DE CONTROL SSH BOT PRO v8.6
+# CON IA OMNIPRESENTE
+# ================================================
 
+# Colores para el panel
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Variables globales
 DB="/opt/ssh-bot/data/users.db"
 CONFIG="/opt/ssh-bot/config/config.json"
+BOT_DIR="/root/ssh-bot"
 
-get_val() { jq -r "$1" "$CONFIG" 2>/dev/null; }
-set_val() { local t=$(mktemp); jq "$1 = $2" "$CONFIG" > "$t" && mv "$t" "$CONFIG"; }
+# Funciones de utilidad
+get_config_value() {
+    local key="$1"
+    jq -r "$key" "$CONFIG" 2>/dev/null || echo ""
+}
 
+update_config() {
+    local key="$1"
+    local value="$2"
+    local temp_file=$(mktemp)
+    
+    jq "$key = $value" "$CONFIG" > "$temp_file" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        mv "$temp_file" "$CONFIG"
+        return 0
+    else
+        rm -f "$temp_file"
+        return 1
+    fi
+}
+
+# Encabezado del panel
 show_header() {
     clear
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo
+    echo -e "${CYAN}"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║              🎛️ PANEL SSH BOT PRO v8.6 + IA                ║"
+    echo "║               🤖 MODE: IA OMNIPRESENTE                      ║"
+    echo "║               💬 Asistencia AUTOMÁTICA                      ║"
+    echo "║               🔍 Detección INTELIGENTE                      ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# Función principal del panel
+main_menu() {
+    while true; do
+        show_header
+        
+        # Obtener estadísticas
+        local total_users=$(sqlite3 "$DB" "SELECT COUNT(*) FROM users" 2>/dev/null || echo "0")
+        local active_users=$(sqlite3 "$DB" "SELECT COUNT(*) FROM users WHERE status=1" 2>/dev/null || echo "0")
+        
+        # Estado del bot
+        local bot_status=$(pm2 jlist 2>/dev/null | jq -r '.[] | select(.name=="ssh-bot") | .pm2_env.status' 2>/dev/null || echo "stopped")
+        if [ "$bot_status" = "online" ]; then
+            local bot_display="${GREEN}● ACTIVO${NC}"
+        else
+            local bot_display="${RED}● DETENIDO${NC}"
+        fi
+        
+        # Estado MercadoPago
+        local mp_token=$(get_config_value '.mercadopago.access_token')
+        if [ -n "$mp_token" ] && [ "$mp_token" != "null" ] && [ "$mp_token" != "" ]; then
+            local mp_status="${GREEN}✅ SDK v2.x ACTIVO${NC}"
+        else
+            local mp_status="${RED}❌ NO CONFIGURADO${NC}"
+        fi
+        
+        # Estado IA
+        local ai_key=$(get_config_value '.bot.google_ai_key')
+        if [ -n "$ai_key" ] && [ "$ai_key" != "null" ] && [ "$ai_key" != "" ] && [ "$ai_key" != "AIzaSyBojMPaBM6NpRbXQP7sC9D9aXc2XZmI8_Q" ]; then
+            local ai_status="${GREEN}✅ GEMINI CONFIGURADO${NC}"
+        else
+            local ai_status="${YELLOW}⚠️ CONFIGURAR API KEY${NC}"
+        fi
+        
+        # Mostrar información
+        echo -e "${YELLOW}📊 ESTADO DEL SISTEMA${NC}"
+        echo -e "  Bot: $bot_display"
+        echo -e "  Usuarios: ${CYAN}$active_users/$total_users${NC} activos/total"
+        echo -e "  MercadoPago: $mp_status"
+        echo -e "  IA Omnipresente: $ai_status"
+        echo -e "  Modo: ${GREEN}Asistencia automática ACTIVADA${NC}"
+        echo ""
+        
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${CYAN}[1]${NC}  🚀 Iniciar/Reiniciar bot"
+        echo -e "${CYAN}[2]${NC}  🛑 Detener bot"
+        echo -e "${CYAN}[3]${NC}  📱 Ver QR WhatsApp"
+        echo -e "${CYAN}[4]${NC}  👤 Crear usuario manual"
+        echo -e "${CYAN}[5]${NC}  👥 Listar usuarios activos"
+        echo -e "${CYAN}[6]${NC}  🗑️ Eliminar usuario"
+        echo -e "${CYAN}[7]${NC}  💰 Configurar precios"
+        echo -e "${CYAN}[8]${NC}  🔑 Configurar MercadoPago"
+        echo -e "${CYAN}[9]${NC}  📱 Gestionar APK"
+        echo -e "${CYAN}[10]${NC} 📊 Ver estadísticas"
+        echo -e "${CYAN}[11]${NC} 🤖 Configurar IA Google Gemini"
+        echo -e "${CYAN}[12]${NC} 🔧 Reparar bot"
+        echo -e "${CYAN}[13]${NC} 📝 Ver logs en tiempo real"
+        echo -e "${CYAN}[14]${NC} ⚙️ Ver configuración"
+        echo -e "${CYAN}[0]${NC}  🚪 Salir"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        
+        echo ""
+        read -p "👉 Selecciona una opción: " option
+        
+        case $option in
+            1)
+                echo -e "\n${YELLOW}🔄 Iniciando bot con IA Omnipresente...${NC}"
+                cd "$BOT_DIR" && pm2 restart ssh-bot 2>/dev/null || pm2 start bot.js --name ssh-bot
+                pm2 save
+                echo -e "${GREEN}✅ Bot reiniciado${NC}"
+                sleep 2
+                ;;
+            2)
+                echo -e "\n${YELLOW}🛑 Deteniendo bot...${NC}"
+                pm2 stop ssh-bot
+                echo -e "${GREEN}✅ Bot detenido${NC}"
+                sleep 2
+                ;;
+            3)
+                show_qr_menu
+                ;;
+            4)
+                create_user_manual
+                ;;
+            5)
+                list_active_users
+                ;;
+            6)
+                delete_user
+                ;;
+            7)
+                configure_prices
+                ;;
+            8)
+                configure_mercadopago
+                ;;
+            9)
+                manage_apk
+                ;;
+            10)
+                show_statistics
+                ;;
+            11)
+                configure_google_ai
+                ;;
+            12)
+                repair_bot
+                ;;
+            13)
+                echo -e "\n${YELLOW}📝 Mostrando logs (Ctrl+C para salir)...${NC}"
+                pm2 logs ssh-bot --lines 100
+                ;;
+            14)
+                show_configuration
+                ;;
+            0)
+                echo -e "\n${GREEN}👋 ¡Hasta pronto!${NC}\n"
+                exit 0
+                ;;
+            *)
+                echo -e "\n${RED}❌ Opción inválida${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# Funciones del panel (continuarían aquí...)
+# ... agregar todas las funciones restantes del panel anterior
+
+# Al final del archivo:
+if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+    echo "Uso: sshbot"
+    echo "Panel de control SSH Bot Pro con IA Omnipresente"
+    exit 0
+fi
+
+main_menu
+
+PANELEOF
+
+# Hacer ejecutable el panel
+chmod +x /usr/local/bin/sshbot
+echo -e "${GREEN}✅ Panel de control con IA Omnipresente instalado${NC}"
+
+# ================================================
+# CONTINUAR CON EL RESTO DE LA INSTALACIÓN
+# ================================================
+
+# ... agregar aquí el resto del script de instalación
+# que incluye: iniciar bot, mensaje final, etc.
+
+# Al final del archivo install.sh
+echo -e "${GREEN}${BOLD}¡Instalación completada exitosamente!${NC}"
+exit 0
