@@ -243,9 +243,9 @@ SQL
 echo -e "${GREEN}✅ Estructura creada${NC}"
 
 # ================================================
-# CREAR BOT CON TODOS LOS FIXES
+# CREAR BOT CON TODOS LOS FIXES + MODIFICACIONES PEDIDAS
 # ================================================
-echo -e "\n${CYAN}${BOLD}🤖 CREANDO BOT CON TODOS LOS FIXES...${NC}"
+echo -e "\n${CYAN}${BOLD}🤖 CREANDO BOT CON TODOS LOS FIXES Y MODIFICACIONES...${NC}"
 
 cd "$USER_HOME"
 
@@ -279,8 +279,8 @@ find node_modules/whatsapp-web.js -name "Client.js" -type f -exec sed -i 's/cons
 
 echo -e "${GREEN}✅ Parche markedUnread aplicado${NC}"
 
-# Crear bot.js CON TODOS LOS FIXES (INCLUYENDO AJUSTES DE 2h Y CRON 15min)
-echo -e "${YELLOW}📝 Creando bot.js con todos los fixes...${NC}"
+# Crear bot.js CON TODOS LOS FIXES + MODIFICACIONES (nombre personalizado + contraseña 12345)
+echo -e "${YELLOW}📝 Creando bot.js con modificaciones pedidas...${NC}"
 
 cat > "bot.js" << 'BOTEOF'
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -344,6 +344,7 @@ moment.locale('es');
 
 console.log(chalk.cyan.bold('\n╔══════════════════════════════════════════════════════════════╗'));
 console.log(chalk.cyan.bold('║      🤖 SSH BOT PRO v8.6 - ALL FIXES APPLIED                ║'));
+console.log(chalk.cyan.bold('║         📝 Con nombre personalizado + contraseña 12345      ║'));
 console.log(chalk.cyan.bold('╚══════════════════════════════════════════════════════════════╝\n'));
 console.log(chalk.yellow(`📍 IP: ${config.bot.server_ip}`));
 console.log(chalk.yellow(`💳 MercadoPago: ${mpEnabled ? '✅ SDK v2.x ACTIVO' : '❌ NO CONFIGURADO'}`));
@@ -352,6 +353,9 @@ console.log(chalk.green('✅ Fechas ISO 8601 corregidas'));
 console.log(chalk.green('✅ APK automático desde /root'));
 console.log(chalk.green('✅ Test 2 horas exactas'));
 console.log(chalk.green('✅ Limpieza cada 15 minutos'));
+console.log(chalk.magenta('✅ MOD: Solicita nombre personalizado'));
+console.log(chalk.magenta('✅ MOD: Usuarios terminan en "j"'));
+console.log(chalk.magenta('✅ MOD: Contraseña siempre "12345"'));
 
 // Servidor APK
 let apkServer = null;
@@ -443,12 +447,15 @@ function generateUsername() {
 }
 
 function generatePassword() {
-    return Math.random().toString(36).substr(2, 10) + Math.random().toString(36).substr(2, 4).toUpperCase();
+    return '12345'; // ✅ MODIFICACIÓN: Contraseña siempre 12345
 }
 
-async function createSSHUser(phone, username, password, days, connections = 1) {
+async function createSSHUser(phone, username, password, days, connections = 1, nombrePersonalizado = null) {
+    const PASSWORD_FIJA = '12345';
+    const SUFIJO = 'j';
+    
     if (days === 0) {
-        // ✅ USUARIO TEST - 2 HORAS EXACTAS (AJUSTADO)
+        // ✅ USUARIO TEST - 2 HORAS EXACTAS
         const expireFull = moment().add(2, 'hours').format('YYYY-MM-DD HH:mm:ss');
         const expireDate = moment().add(2, 'hours').format('YYYY-MM-DD');
         
@@ -456,7 +463,7 @@ async function createSSHUser(phone, username, password, days, connections = 1) {
         
         const commands = [
             `useradd -m -s /bin/bash ${username}`,
-            `echo "${username}:${password}" | chpasswd`
+            `echo "${username}:${PASSWORD_FIJA}" | chpasswd`
         ];
         
         for (const cmd of commands) {
@@ -471,24 +478,35 @@ async function createSSHUser(phone, username, password, days, connections = 1) {
         const tipo = 'test';
         return new Promise((resolve, reject) => {
             db.run(`INSERT INTO users (phone, username, password, tipo, expires_at, max_connections, status) VALUES (?, ?, ?, ?, ?, ?, 1)`,
-                [phone, username, password, tipo, expireFull, 1],
+                [phone, username, PASSWORD_FIJA, tipo, expireFull, 1],
                 (err) => err ? reject(err) : resolve({ 
                     username, 
-                    password, 
+                    password: PASSWORD_FIJA, 
                     expires: expireFull,
                     tipo: 'test',
-                    duration: '2 horas'  // ✅ CAMBIADO A 2 HORAS
+                    duration: '2 horas'
                 }));
         });
     } else {
-        // Usuario PREMIUM - días completos (SIN CAMBIOS)
+        // Usuario PREMIUM - días completos
         const expireDate = moment().add(days, 'days').format('YYYY-MM-DD');
         const expireFull = moment().add(days, 'days').format('YYYY-MM-DD 23:59:59');
         
-        console.log(chalk.yellow(`⌛ Premium ${username} expira: ${expireDate}`));
+        // Si se proporciona un nombre personalizado, agregar sufijo "j"
+        let finalUsername = username;
+        if (nombrePersonalizado) {
+            // Limpiar caracteres especiales y agregar sufijo "j"
+            finalUsername = nombrePersonalizado.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() + SUFIJO;
+            console.log(chalk.yellow(`👤 Nombre personalizado: ${nombrePersonalizado} -> ${finalUsername}`));
+        } else {
+            // Si no hay nombre personalizado, generar uno aleatorio con sufijo
+            finalUsername = generateUsername() + SUFIJO;
+        }
+        
+        console.log(chalk.yellow(`⌛ Premium ${finalUsername} expira: ${expireDate}`));
         
         try {
-            await execPromise(`useradd -M -s /bin/false -e ${expireDate} ${username} && echo "${username}:${password}" | chpasswd`);
+            await execPromise(`useradd -M -s /bin/false -e ${expireDate} ${finalUsername} && echo "${finalUsername}:${PASSWORD_FIJA}" | chpasswd`);
         } catch (error) {
             console.error(chalk.red('❌ Error creando premium:'), error.message);
             throw error;
@@ -497,10 +515,10 @@ async function createSSHUser(phone, username, password, days, connections = 1) {
         const tipo = 'premium';
         return new Promise((resolve, reject) => {
             db.run(`INSERT INTO users (phone, username, password, tipo, expires_at, max_connections, status) VALUES (?, ?, ?, ?, ?, ?, 1)`,
-                [phone, username, password, tipo, expireFull, 1],
+                [phone, finalUsername, PASSWORD_FIJA, tipo, expireFull, 1],
                 (err) => err ? reject(err) : resolve({ 
-                    username, 
-                    password, 
+                    username: finalUsername, 
+                    password: PASSWORD_FIJA, 
                     expires: expireFull,
                     tipo: 'premium',
                     duration: `${days} días`
@@ -672,26 +690,59 @@ async function checkPendingPayments() {
                     if (mpPayment.status === 'approved') {
                         console.log(chalk.green(`✅ PAGO APROBADO: ${payment.payment_id}`));
                         
-                        const username = generateUsername();
-                        const password = generatePassword();
-                        const connMap = { '7d': 1, '15d': 1, '30d': 1 };
-                        const connections = connMap[payment.plan] || 1;
-                        
-                        const result = await createSSHUser(payment.phone, username, password, payment.days, connections);
-                        
-                        db.run(`UPDATE payments SET status = 'approved', approved_at = CURRENT_TIMESTAMP WHERE payment_id = ?`, [payment.payment_id]);
-                        
-                        const expireDate = moment().add(payment.days, 'days').format('DD/MM/YYYY');
-                        
-                        const message = `╔══════════════════════════════════════╗
+                        // Enviar solicitud de nombre al usuario
+                        try {
+                            await client.sendMessage(payment.phone, `🎉 *¡PAGO APROBADO!*\n\n💬 *Por favor, responde con tu nombre:*\n(Ejemplo: pedro, maria, juan)\n\n⚠️ *Importante:*\n• Solo letras y números\n• Se añadirá la letra "j" al final\n• Ejemplo: "pedro" → "pedroj"`);
+                            
+                            // Esperar respuesta del usuario (hasta 2 minutos)
+                            let nombreRecibido = null;
+                            const waitForName = new Promise((resolve) => {
+                                const listener = async (msg) => {
+                                    if (msg.from === payment.phone && !msg.body.includes('@')) {
+                                        const respuesta = msg.body.trim().toLowerCase();
+                                        if (respuesta.length > 2 && respuesta.length < 20 && /^[a-zA-Z0-9]+$/.test(respuesta)) {
+                                            nombreRecibido = respuesta;
+                                            client.removeListener('message', listener);
+                                            resolve(nombreRecibido);
+                                        } else {
+                                            await client.sendMessage(payment.phone, `⚠️ *Nombre inválido*\n\nPor favor, usa solo letras y números (ejemplo: pedro, maria123)`);
+                                        }
+                                    }
+                                };
+                                client.on('message', listener);
+                                
+                                // Timeout después de 2 minutos
+                                setTimeout(() => {
+                                    client.removeListener('message', listener);
+                                    resolve(null);
+                                }, 120000);
+                            });
+                            
+                            nombreRecibido = await waitForName;
+                            
+                            if (!nombreRecibido) {
+                                console.log(chalk.yellow('⚠️ Usuario no respondió con nombre válido, usando nombre aleatorio'));
+                                nombreRecibido = null;
+                            }
+                            
+                            const connMap = { '7d': 1, '15d': 1, '30d': 1 };
+                            const connections = connMap[payment.plan] || 1;
+                            
+                            const result = await createSSHUser(payment.phone, generateUsername(), '12345', payment.days, connections, nombreRecibido);
+                            
+                            db.run(`UPDATE payments SET status = 'approved', approved_at = CURRENT_TIMESTAMP WHERE payment_id = ?`, [payment.payment_id]);
+                            
+                            const expireDate = moment().add(payment.days, 'days').format('DD/MM/YYYY');
+                            
+                            const message = `╔══════════════════════════════════════╗
 ║   🎉 *PAGO CONFIRMADO*               ║
 ╚══════════════════════════════════════╝
 
 ✅ Tu compra ha sido aprobada
 
 📋 *DATOS DE ACCESO:*
-👤 Usuario: *${username}*
-🔑 Contraseña: *${password}*
+👤 Usuario: *${result.username}*
+🔑 Contraseña: *12345*
 
 ⏰ *VÁLIDO HASTA:* ${expireDate}
 🔌 *CONEXIÓN:* 1
@@ -704,9 +755,25 @@ async function checkPendingPayments() {
 🎊 ¡Disfruta del servicio premium!
 
 💬 Soporte: *Escribe 6*`;
-                        
-                        await client.sendMessage(payment.phone, message, { sendSeen: false });
-                        console.log(chalk.green(`✅ Usuario creado y notificado: ${username}`));
+                            
+                            await client.sendMessage(payment.phone, message, { sendSeen: false });
+                            console.log(chalk.green(`✅ Usuario creado y notificado: ${result.username}`));
+                            
+                        } catch (error) {
+                            console.error(chalk.red('❌ Error en creación de usuario:'), error.message);
+                            
+                            // Crear usuario con nombre aleatorio como fallback
+                            try {
+                                const username = generateUsername() + 'j';
+                                const result = await createSSHUser(payment.phone, username, '12345', payment.days, 1, null);
+                                
+                                const expireDate = moment().add(payment.days, 'days').format('DD/MM/YYYY');
+                                const message = `✅ *PAGO APROBADO*\n\n👤 Usuario: *${result.username}*\n🔑 Contraseña: *12345*\n⏰ Válido hasta: ${expireDate}`;
+                                await client.sendMessage(payment.phone, message);
+                            } catch (fallbackError) {
+                                console.error(chalk.red('❌ Error en fallback:'), fallbackError.message);
+                            }
+                        }
                     }
                 } else {
                     console.log(chalk.gray(`⏳ Sin respuesta para ${payment.payment_id}`));
@@ -754,14 +821,13 @@ client.on('message', async (msg) => {
         await client.sendMessage(phone, '⏳ Creando cuenta test...', { sendSeen: false });
         try {
             const username = generateUsername();
-            const password = generatePassword();
-            await createSSHUser(phone, username, password, 0, 1);
+            await createSSHUser(phone, username, '12345', 0, 1);
             registerTest(phone);
             
             await client.sendMessage(phone, `✅ *PRUEBA ACTIVADA*
 
 👤 Usuario: *${username}*
-🔑 Contraseña: *${password}*
+🔑 Contraseña: *12345*
 ⏰ Duración: 2 horas  ⚡
 🔌 Conexión: 1
 
@@ -1120,7 +1186,7 @@ console.log(chalk.green('\n🚀 Inicializando bot...\n'));
 client.initialize();
 BOTEOF
 
-echo -e "${GREEN}✅ Bot creado con todos los fixes${NC}"
+echo -e "${GREEN}✅ Bot creado con modificaciones pedidas${NC}"
 
 # ================================================
 # CREAR PANEL CON VALIDACIÓN FIXED (FIX 1)
