@@ -94,6 +94,7 @@ echo -e "   • 🔐 CONTRASEÑA FIJA: 12345 para todos"
 echo -e "   • 🔌 PLANES CON 2 CONEXIONES"
 echo -e "   • 👤 Nombres de usuario terminan en 'j'"
 echo -e "   • 🆕 NUEVO PLAN: 50 días (1 conexión)"
+echo -e "   • 🤖 BOT SILENCIOSO: Solo responde a comandos válidos"
 echo -e "\n${RED}⚠️  Se eliminarán instalaciones anteriores${NC}"
 
 read -p "$(echo -e "${YELLOW}¿Continuar con la instalación? (s/N): ${NC}")" -n 1 -r
@@ -430,6 +431,7 @@ console.log(chalk.green('✅ Test 2 horas exactas'));
 console.log(chalk.green('✅ CONTRASEÑA FIJA: 12345 para todos los usuarios'));
 console.log(chalk.green('✅ PLANES CON 2 CONEXIONES'));
 console.log(chalk.green('✅ USUARIOS TERMINAN EN "j"'));
+console.log(chalk.green('✅ BOT SILENCIOSO: Solo responde a comandos válidos'));
 
 // Función para generar nombre de usuario terminado en 'j'
 function generateUsername() {
@@ -1263,21 +1265,10 @@ ${config.links.support}
 💬 Escribe "menu" para volver al inicio`, { sendSeen: false });
     }
     else {
-        // Comando no reconocido
-        await client.sendMessage(phone, `❌ *COMANDO NO RECONOCIDO*
-
-📋 Comandos disponibles:
-• menu - Menú principal
-• 1 - Prueba gratis (solo en menú)
-• 2 - Ver planes (solo en menú)
-• 3 - Mis cuentas (solo en menú)
-• 4 - Estado de pago (solo en menú)
-• 5 - Descargar APP (solo en menú)
-• 6 - Soporte (solo en menú)
-
-💡 *PARA COMPRAR:* Escribe "2" para ver planes, luego 1-7 para seleccionar
-
-📞 Soporte: *${config.links.support}*`, { sendSeen: false });
+        // 🚫 **MODIFICADO: NO RESPONDER A MENSAJES NO RECONOCIDOS**
+        // Solo respondemos a comandos específicos, el resto se ignora
+        console.log(chalk.gray(`📭 Mensaje ignorado de ${phone.split('@')[0]}: "${text.substring(0, 50)}"`));
+        // No enviamos ningún mensaje de respuesta
     }
 });
 
@@ -1376,6 +1367,7 @@ show_header() {
     echo -e "${CYAN}║               🔐 CONTRASEÑA FIJA: 12345                    ║${NC}"
     echo -e "${CYAN}║               🆕 NUEVO PLAN: 50 días (1 conexión)          ║${NC}"
     echo -e "${CYAN}║               👤 USUARIOS TERMINAN EN "j"                  ║${NC}"
+    echo -e "${CYAN}║               🤖 BOT SILENCIOSO: Solo responde a comandos ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}\n"
 }
 
@@ -1421,6 +1413,7 @@ while true; do
     echo -e "  Sistema: ${GREEN}Estados inteligentes${NC} (sin conflictos)"
     echo -e "  Plan 50 días: ${GREEN}DISPONIBLE${NC} (comando 7)"
     echo -e "  Usuarios terminan en: ${GREEN}j${NC}"
+    echo -e "  Bot: ${GREEN}SILENCIOSO${NC} (solo responde a comandos)"
     echo -e "  Soporte: ${CYAN}$(get_val '.links.support')${NC}"
     echo -e ""
     
@@ -1712,6 +1705,7 @@ while true; do
             echo -e "  IP: $(get_val '.bot.server_ip')"
             echo -e "  Versión: $(get_val '.bot.version')"
             echo -e "  Soporte: $(get_val '.links.support')"
+            echo -e "  Modo: SILENCIOSO (solo responde a comandos)"
             
             echo -e "\n${YELLOW}💰 PRECIOS (1 CONEXIÓN):${NC}"
             echo -e "  1. 7d: $(get_val '.prices.price_7d_1conn') ARS"
@@ -1931,6 +1925,7 @@ if pm2 status | grep -q "ssh-bot"; then
     STATUS=$(pm2 jlist 2>/dev/null | jq -r '.[] | select(.name=="ssh-bot") | .pm2_env.status' 2>/dev/null || echo "unknown")
     echo -e "  Estado: $STATUS"
     echo -e "  Nombre: SERVERTUC™ BOT"
+    echo -e "  Modo: SILENCIOSO (solo comandos)"
 else
     echo -e "❌ Bot NO está en ejecución"
 fi
@@ -1974,6 +1969,7 @@ cat << "FINAL"
 ║           🔌 PLANES CON 2 CONEXIONES                       ║
 ║           🔐 CONTRASEÑA FIJA: 12345 PARA TODOS             ║
 ║           👤 USUARIOS TERMINAN EN "j"                      ║
+║           🤖 BOT SILENCIOSO: Solo responde a comandos      ║
 ║           ⌨️  1,2,3,4,5,6,7 FUNCIONAN PARA COMPRAR EN PLANES║
 ║           🆕 NUEVO PLAN: 50 días (1 conexión)              ║
 ║           🧠 SIN CONFLICTOS ENTRE MENÚS                    ║
@@ -1993,6 +1989,7 @@ echo -e "${GREEN}✅ CONTRASEÑA FIJA: 12345 para todos los usuarios${NC}"
 echo -e "${GREEN}✅ USUARIOS TERMINAN EN 'j'${NC}"
 echo -e "${GREEN}✅ NOMBRE: SERVERTUC™ BOT${NC}"
 echo -e "${GREEN}✅ SOPORTE: https://wa.me/3813414485${NC}"
+echo -e "${GREEN}✅ BOT SILENCIOSO: Solo responde a comandos válidos${NC}"
 echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}\n"
 
 echo -e "${YELLOW}📋 COMANDOS DISPONIBLES:${NC}\n"
@@ -2027,7 +2024,8 @@ echo -e "${YELLOW}🔐 CONFIGURACIÓN:${NC}"
 echo -e "  • Contraseña: ${GREEN}12345${NC} para TODOS los usuarios"
 echo -e "  • Formato usuarios: terminan en ${GREEN}j${NC}"
 echo -e "  • Nombre: ${GREEN}SERVERTUC™ BOT${NC}"
-echo -e "  • Soporte: ${CYAN}https://wa.me/3813414485${NC}\n"
+echo -e "  • Soporte: ${CYAN}https://wa.me/3813414485${NC}"
+echo -e "  • Bot: ${GREEN}SILENCIOSO${NC} (solo responde a comandos)\n"
 
 echo -e "${YELLOW}🧠 CÓMO FUNCIONA EL SISTEMA DE ESTADOS:${NC}"
 echo -e "  1. Cada usuario tiene un estado (main_menu, viewing_plans, etc.)"
