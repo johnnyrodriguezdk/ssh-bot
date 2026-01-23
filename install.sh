@@ -249,6 +249,7 @@ import subprocess
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +295,6 @@ class SSHManager:
             
             # Configurar expiración si se especifica
             if expire_days > 0:
-                from datetime import datetime, timedelta
                 expire_date = (datetime.now() + timedelta(days=expire_days)).strftime('%Y-%m-%d')
                 cmd = f"sudo chage -E {expire_date} {username}"
                 subprocess.run(cmd, shell=True, check=True)
@@ -441,7 +441,7 @@ EOF
 }
 
 create_ai_processor() {
-    print_step "Creando módulo de IA (sin estados de WhatsApp)...")
+    print_step "Creando módulo de IA (sin estados de WhatsApp)..."
     
     cat > "$INSTALL_DIR/modules/ai_processor.py" << 'EOF'
 """
@@ -764,7 +764,7 @@ EOF
 }
 
 create_whatsapp_client() {
-    print_step "Creando cliente WhatsApp (sin estados)...")
+    print_step "Creando cliente WhatsApp (sin estados)..."
     
     cat > "$INSTALL_DIR/modules/whatsapp_client.py" << 'EOF'
 """
