@@ -1,14 +1,7 @@
 #!/bin/bash
 # ================================================
 # SSH BOT HWID - MENÚ COMPLETO + SISTEMA HWID
-# COMBINACIÓN: Menú tipo SERVERTUC™ + Funcionalidad HWID (mgvpn)
-# CARACTERÍSTICAS:
-# - Menú principal: 1=Prueba, 2=Planes, 3=Mis HWIDs, 4=Estado pago, 5=APP, 6=Soporte
-# - Menú planes: 7 opciones (1-7) con días: 7,15,30,50 (y 2 conexiones opcional)
-# - Sistema HWID: primero nombre, luego HWID
-# - Notificaciones de vencimiento cada hora
-# - MercadoPago SDK v2.x integrado
-# - Panel de control completo
+# Versión corregida: muestra QR correctamente
 # ================================================
 
 set -e
@@ -23,7 +16,7 @@ PURPLE='\033[0;35m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Banner inicial
+# Banner
 clear
 echo -e "${CYAN}${BOLD}"
 cat << "BANNER"
@@ -45,20 +38,11 @@ cat << "BANNER"
 ║               🆕 PLANES: 1=7d, 2=15d, 3=30d, 4=7d(2c),      ║
 ║                        5=15d(2c), 6=30d(2c), 7=50d(1c)      ║
 ║               ⏰ NOTIFICACIONES DE VENCIMIENTO              ║
+║               ✅ QR CORREGIDO: SE MUESTRA EN TERMINAL       ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 BANNER
 echo -e "${NC}"
-
-echo -e "${GREEN}✅ CARACTERÍSTICAS PRINCIPALES:${NC}"
-echo -e "  🔐 ${CYAN}Sistema HWID${NC} - Sin usuarios SSH, solo códigos de hardware"
-echo -e "  📱 ${CYAN}Flujo mejorado${NC} - Primero nombre, luego HWID"
-echo -e "  💰 ${GREEN}MercadoPago SDK v2.x${NC} - Pagos automáticos con QR"
-echo -e "  📋 ${YELLOW}MENÚ PRINCIPAL:${NC} 1,2,3,4,5,6"
-echo -e "  📋 ${YELLOW}MENÚ PLANES:${NC} 1-7 (soporta 1 y 2 conexiones)"
-echo -e "  ⏰ ${CYAN}Notificaciones de vencimiento${NC} - Cada hora"
-echo -e "  🎛️  ${PURPLE}Panel de control completo${NC} - Con comando 'sshbot'"
-echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}\n"
 
 # Verificar root
 if [[ $EUID -ne 0 ]]; then
@@ -67,11 +51,19 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# --- ELIMINAR CONFLICTOS DE NODE.JS ---
+echo -e "\n${CYAN}${BOLD}🔧 Verificando conflictos de Node.js...${NC}"
+if dpkg -l | grep -q libnode72; then
+    echo -e "${YELLOW}⚠️  Eliminando paquete conflictivo libnode72...${NC}"
+    apt-get remove --purge -y libnode72 nodejs
+    apt-get autoremove -y
+    apt-get clean
+fi
+
 # Detectar IP
-echo -e "${CYAN}${BOLD}🔍 DETECTANDO IP DEL SERVIDOR...${NC}"
+echo -e "\n${CYAN}${BOLD}🔍 DETECTANDO IP DEL SERVIDOR...${NC}"
 SERVER_IP=$(curl -4 -s --max-time 10 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}' || echo "127.0.0.1")
 if [[ -z "$SERVER_IP" || "$SERVER_IP" == "127.0.0.1" ]]; then
-    echo -e "${RED}❌ No se pudo obtener IP pública${NC}"
     read -p "📝 Ingresa la IP del servidor manualmente: " SERVER_IP
 fi
 echo -e "${GREEN}✅ IP detectada: ${CYAN}$SERVER_IP${NC}\n"
@@ -82,7 +74,7 @@ if [[ -z "$BOT_NAME" ]]; then
     BOT_NAME="SSH Bot HWID"
     echo -e "${YELLOW}⚠️ Usando nombre por defecto: ${CYAN}$BOT_NAME${NC}"
 fi
-echo -e ""
+echo ""
 
 # Confirmar instalación
 echo -e "${YELLOW}⚠️  ESTE INSTALADOR HARÁ:${NC}"
@@ -110,7 +102,7 @@ echo -e "\n${CYAN}${BOLD}📦 INSTALANDO DEPENDENCIAS...${NC}"
 apt-get update -y
 apt-get upgrade -y
 
-# Instalar Node.js 18.x
+# Instalar Node.js 18.x (ya no debería haber conflicto)
 echo -e "${YELLOW}📦 Instalando Node.js 18.x...${NC}"
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt-get install -y nodejs gcc g++ make
@@ -133,7 +125,6 @@ apt-get install -y \
     unzip cron ufw
 
 # Configurar firewall
-echo -e "${YELLOW}🛡️ Configurando firewall...${NC}"
 ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
@@ -172,7 +163,7 @@ mkdir -p /root/.wppconnect
 chmod -R 755 "$INSTALL_DIR"
 chmod -R 700 /root/.wppconnect
 
-# Crear configuración con precios completos (1 y 2 conexiones)
+# Crear configuración
 cat > "$CONFIG_FILE" << EOF
 {
     "bot": {
@@ -209,9 +200,8 @@ cat > "$CONFIG_FILE" << EOF
 }
 EOF
 
-# Crear base de datos combinada
+# Crear base de datos
 sqlite3 "$DB_FILE" << 'SQL'
--- Tabla principal de HWIDs
 CREATE TABLE hwid_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     phone TEXT,
@@ -223,8 +213,6 @@ CREATE TABLE hwid_users (
     max_connections INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
--- Control de pruebas diarias
 CREATE TABLE daily_tests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     phone TEXT,
@@ -233,8 +221,6 @@ CREATE TABLE daily_tests (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(phone, date)
 );
-
--- Pagos
 CREATE TABLE payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     payment_id TEXT UNIQUE,
@@ -254,8 +240,6 @@ CREATE TABLE payments (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     approved_at DATETIME
 );
-
--- Logs del sistema
 CREATE TABLE logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT,
@@ -263,16 +247,12 @@ CREATE TABLE logs (
     data TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
--- Estados de conversación
 CREATE TABLE user_state (
     phone TEXT PRIMARY KEY,
     state TEXT DEFAULT 'main_menu',
     data TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
--- Intentos de HWID (para auditoría)
 CREATE TABLE hwid_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     hwid TEXT,
@@ -281,8 +261,6 @@ CREATE TABLE hwid_attempts (
     action TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
--- Índices
 CREATE INDEX idx_hwid_users_hwid ON hwid_users(hwid);
 CREATE INDEX idx_hwid_users_status ON hwid_users(status);
 CREATE INDEX idx_payments_hwid ON payments(hwid);
@@ -294,9 +272,9 @@ SQL
 echo -e "${GREEN}✅ Base de datos HWID creada${NC}"
 
 # ================================================
-# CREAR BOT CON WPPCONNECT Y SISTEMA HWID
+# CREAR BOT CON WPPCONNECT Y SISTEMA HWID (QR CORREGIDO)
 # ================================================
-echo -e "\n${CYAN}${BOLD}🤖 CREANDO BOT CON SISTEMA HWID Y MENÚ COMPLETO...${NC}"
+echo -e "\n${CYAN}${BOLD}🤖 CREANDO BOT CON SISTEMA HWID Y QR CORREGIDO...${NC}"
 
 cd "$USER_HOME"
 
@@ -325,9 +303,9 @@ echo -e "${YELLOW}📦 Instalando dependencias Node.js...${NC}"
 npm install --silent 2>&1 | grep -v "npm WARN" || true
 
 # ================================================
-# CREAR BOT.JS COMPLETO (VERSIÓN HWID CON MENÚ)
+# BOT.JS CON QR CORREGIDO (VERSIÓN COMPLETA)
 # ================================================
-echo -e "${YELLOW}📝 Creando bot.js con menú completo y sistema HWID...${NC}"
+echo -e "${YELLOW}📝 Creando bot.js con QR corregido...${NC}"
 
 cat > "bot.js" << 'BOTEOF'
 const wppconnect = require('@wppconnect-team/wppconnect');
@@ -351,6 +329,7 @@ console.log(chalk.cyan.bold('\n╔═══════════════�
 console.log(chalk.cyan.bold('║              __BOT_NAME__ - HWID + MENÚ COMPLETO             ║'));
 console.log(chalk.cyan.bold('║               SISTEMA: PRIMERO NOMBRE, LUEGO HWID            ║'));
 console.log(chalk.cyan.bold('║               ⏰ NOTIFICACIONES DE VENCIMIENTO                ║'));
+console.log(chalk.cyan.bold('║               ✅ QR CORREGIDO: SE MUESTRA CORRECTAMENTE      ║'));
 console.log(chalk.cyan.bold('╚══════════════════════════════════════════════════════════════╝\n'));
 
 // Cargar configuración
@@ -400,11 +379,9 @@ initMercadoPago();
 let client = null;
 
 // ================================================
-// FUNCIONES HWID (del primer script)
+// FUNCIONES HWID
 // ================================================
-
 function validateHWID(hwid) {
-    // Formato: APP-E3E4D5CBB7636907
     const hwidRegex = /^APP-[A-F0-9]{16}$/;
     return hwidRegex.test(hwid);
 }
@@ -437,7 +414,6 @@ function getHWIDInfo(hwid) {
 
 async function registerHWID(phone, nombre, hwid, days, tipo = 'premium', connections = 1) {
     try {
-        // Verificar si HWID ya existe
         const existing = await new Promise((resolve) => {
             db.get('SELECT hwid FROM hwid_users WHERE hwid = ?', [hwid], (err, row) => {
                 resolve(row);
@@ -455,7 +431,6 @@ async function registerHWID(phone, nombre, hwid, days, tipo = 'premium', connect
             expireFull = moment().add(days, 'days').format('YYYY-MM-DD 23:59:59');
         }
 
-        // Registrar en BD
         await new Promise((resolve, reject) => {
             db.run(
                 `INSERT INTO hwid_users (phone, nombre, hwid, tipo, expires_at, max_connections, status) 
@@ -468,7 +443,6 @@ async function registerHWID(phone, nombre, hwid, days, tipo = 'premium', connect
             );
         });
 
-        // Registrar intento
         db.run(`INSERT INTO hwid_attempts (hwid, phone, nombre, action) VALUES (?, ?, ?, 'registered')`, 
             [hwid, phone, nombre]);
 
@@ -501,9 +475,8 @@ function registerTest(phone, nombre) {
 }
 
 // ================================================
-// SISTEMA DE ESTADOS (del segundo script)
+// SISTEMA DE ESTADOS
 // ================================================
-
 function getUserState(phone) {
     return new Promise((resolve) => {
         db.get('SELECT state, data FROM user_state WHERE phone = ?', [phone], (err, row) => {
@@ -535,7 +508,6 @@ function setUserState(phone, state, data = null) {
 // ================================================
 // FUNCIONES DE PAGO MERCADOPAGO
 // ================================================
-
 async function createMercadoPagoPayment(phone, planName, days, amount, connections = 1) {
     if (!mpEnabled) {
         return { success: false, error: 'MercadoPago no configurado' };
@@ -573,11 +545,9 @@ async function createMercadoPagoPayment(phone, planName, days, amount, connectio
 
         const preference = await mpPreference.create({ body: preferenceData });
 
-        // Generar QR code
         const qrPath = path.join(config.paths.qr_codes, `${paymentId}.png`);
         await QRCode.toFile(qrPath, preference.init_point);
 
-        // Guardar en base de datos
         db.run(
             `INSERT INTO payments (payment_id, phone, plan, days, connections, amount, status, payment_url, qr_code, preference_id) 
              VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
@@ -601,7 +571,6 @@ async function createMercadoPagoPayment(phone, planName, days, amount, connectio
 // ================================================
 // MENSAJES DEL SISTEMA
 // ================================================
-
 function getMainMenuMessage() {
     return `*🤖 ${config.bot.name}*
 
@@ -650,7 +619,6 @@ function getPlanDetails(planNumber) {
 // ================================================
 // MANEJADOR PRINCIPAL DE MENSAJES
 // ================================================
-
 async function handleMessage(message) {
     const phone = message.from.replace('@c.us', '');
     const text = message.body || '';
@@ -658,43 +626,34 @@ async function handleMessage(message) {
 
     console.log(chalk.blue(`📱 ${phone}: ${text} (Estado: ${userState.state})`));
 
-    // Comando de inicio
     if (text.toLowerCase() === 'menu' || text === '0') {
         await setUserState(phone, 'main_menu');
         await client.sendText(message.from, getMainMenuMessage());
         return;
     }
 
-    // Sistema de estados
     switch (userState.state) {
         case 'main_menu':
             await handleMainMenu(phone, text, message.from);
             break;
-
         case 'plans_menu':
             await handlePlansMenu(phone, text, message.from);
             break;
-
         case 'buying_plan':
             await handleBuyingPlan(phone, text, message.from, userState.data);
             break;
-
         case 'awaiting_test_nombre':
             await handleTestNombre(phone, text, message.from);
             break;
-
         case 'awaiting_test_hwid':
             await handleTestHWID(phone, text, message.from, userState.data);
             break;
-
         case 'awaiting_payment_nombre':
             await handlePaymentNombre(phone, text, message.from, userState.data);
             break;
-
         case 'awaiting_payment_hwid':
             await handlePaymentHWID(phone, text, message.from, userState.data);
             break;
-
         default:
             await setUserState(phone, 'main_menu');
             await client.sendText(message.from, getMainMenuMessage());
@@ -702,28 +661,23 @@ async function handleMessage(message) {
 }
 
 // ================================================
-// MANEJADORES POR ESTADO
+// MANEJADORES POR ESTADO (COMPLETOS)
 // ================================================
-
 async function handleMainMenu(phone, text, from) {
     switch (text) {
         case '1': // Prueba gratis
             await handleFreeTestStart(phone, from);
             break;
-
         case '2': // Ver planes
             await setUserState(phone, 'plans_menu');
             await client.sendText(from, getPlansMenuMessage());
             break;
-
         case '3': // Mis HWIDs
             await showMyHWIDs(phone, from);
             break;
-
         case '4': // Estado de pago
             await showPaymentStatus(phone, from);
             break;
-
         case '5': // Descargar APP
             await client.sendText(from, `*📲 DESCARGAR APP:*
 
@@ -732,7 +686,6 @@ ${config.links.app_download}
 
 _Después de descargar, vuelve al menú principal escribiendo_ *menu*`);
             break;
-
         case '6': // Soporte
             await client.sendText(from, `*🆘 SOPORTE:*
 
@@ -741,7 +694,6 @@ ${config.links.support}
 
 _Después de contactar, vuelve al menú principal escribiendo_ *menu*`);
             break;
-
         default:
             await client.sendText(from, `❌ *Opción no válida*
 
@@ -789,7 +741,6 @@ ${getPlansMenuMessage()}`);
 
 async function handleBuyingPlan(phone, text, from, planData) {
     if (text === '1') {
-        // Procesar pago
         const amount = config.prices[planData.price];
         const payment = await createMercadoPagoPayment(phone, planData.name, planData.days, amount, planData.connections);
 
@@ -811,7 +762,6 @@ ${payment.paymentUrl}
 
 Escribe *menu* para volver al menú principal.`);
 
-            // Guardar estado de espera de pago
             await setUserState(phone, 'waiting_payment', {
                 paymentId: payment.paymentId,
                 planData
@@ -842,7 +792,6 @@ Escribe *menu* para volver.`);
 }
 
 async function handleFreeTestStart(phone, from) {
-    // Verificar si ya usó prueba hoy
     const canTest = await canCreateTest(phone);
     
     if (!canTest) {
@@ -855,7 +804,6 @@ Solo puedes usar la prueba gratuita una vez por día.
         return;
     }
 
-    // Pedir nombre primero
     await setUserState(phone, 'awaiting_test_nombre');
     await client.sendText(from, `⏳ *PRUEBA GRATUITA - ${config.prices.test_hours} HORAS*
 
@@ -870,7 +818,6 @@ async function handleTestNombre(phone, text, from) {
         return;
     }
 
-    // Guardar nombre y pasar a pedir HWID
     await setUserState(phone, 'awaiting_test_hwid', { nombre });
 
     await client.sendText(from, `✅ Gracias *${nombre}*
@@ -901,7 +848,6 @@ Envía el HWID nuevamente o escribe *MENU* para volver`);
         return;
     }
 
-    // Verificar si HWID ya está activo
     const active = await isHWIDActive(hwid);
     if (active) {
         await client.sendText(from, `❌ *ESTE HWID YA ESTÁ ACTIVO*
@@ -939,7 +885,6 @@ Escribe *menu* para ver más opciones.`);
     await setUserState(phone, 'main_menu');
 }
 
-// Flujo después de pago: primero nombre, luego HWID
 async function handlePaymentNombre(phone, text, from, data) {
     const nombre = text.trim();
 
@@ -948,7 +893,6 @@ async function handlePaymentNombre(phone, text, from, data) {
         return;
     }
 
-    // Guardar nombre y pasar a esperar HWID
     data.nombre = nombre;
     await setUserState(phone, 'awaiting_payment_hwid', data);
 
@@ -978,7 +922,6 @@ Envía el HWID nuevamente:`);
         return;
     }
 
-    // Verificar si HWID ya está activo
     const active = await isHWIDActive(hwid);
     if (active) {
         await client.sendText(from, `❌ *ESTE HWID YA ESTÁ ACTIVO*
@@ -989,7 +932,6 @@ Si es tuyo, contacta soporte.`);
 
     await client.sendText(from, '⏳ Activando tu HWID premium...');
 
-    // Registrar HWID premium
     const result = await registerHWID(
         phone, 
         nombre,
@@ -1000,7 +942,6 @@ Si es tuyo, contacta soporte.`);
     );
 
     if (result.success) {
-        // Actualizar pago con HWID
         db.run(`UPDATE payments SET hwid = ?, nombre = ? WHERE payment_id = ?`,
             [hwid, nombre, data.paymentId]);
 
@@ -1024,10 +965,6 @@ Escribe *menu* para ver más opciones.`);
 
     await setUserState(phone, 'main_menu');
 }
-
-// ================================================
-// FUNCIONES DE CONSULTA
-// ================================================
 
 async function showMyHWIDs(phone, from) {
     db.all(
@@ -1118,8 +1055,6 @@ Para comprar un plan escribe *menu* y elige la opción *2*.`);
 // ================================================
 // CRON JOBS
 // ================================================
-
-// Verificar pagos pendientes cada 2 minutos
 function setupPaymentChecker() {
     cron.schedule('*/2 * * * *', async () => {
         if (!mpEnabled) return;
@@ -1150,11 +1085,9 @@ function setupPaymentChecker() {
                             if (mpPayment.status === 'approved') {
                                 console.log(chalk.green(`✅ PAGO APROBADO: ${payment.payment_id}`));
 
-                                // Actualizar pago
                                 db.run(`UPDATE payments SET status = 'approved', approved_at = CURRENT_TIMESTAMP WHERE payment_id = ?`, 
                                     [payment.payment_id]);
 
-                                // Notificar al usuario y pedir nombre
                                 if (client) {
                                     await client.sendText(
                                         payment.phone,
@@ -1186,13 +1119,11 @@ Para continuar con la activación, dime tu nombre.`
     });
 }
 
-// Notificaciones de vencimiento cada hora
 function setupExpirationNotifications() {
     cron.schedule('0 * * * *', async () => {
         console.log(chalk.yellow('⏰ Verificando HWIDs próximos a vencer...'));
 
         try {
-            // HWIDs que expiran en las próximas 24 horas
             const expiringSoon = await new Promise((resolve, reject) => {
                 db.all(`
                     SELECT * FROM hwid_users 
@@ -1228,15 +1159,12 @@ Hola *${hwid.nombre}*, tu acceso expirará en aproximadamente *${hoursLeft} hora
     });
 }
 
-// Limpiar HWIDs expirados cada 15 minutos
 function setupCleanupCron() {
     cron.schedule('*/15 * * * *', async () => {
         console.log(chalk.yellow('🧹 Limpiando HWIDs expirados...'));
 
         const now = moment().format('YYYY-MM-DD HH:mm:ss');
         db.run('UPDATE hwid_users SET status = 0 WHERE expires_at < ? AND status = 1', [now]);
-
-        // Limpiar estados antiguos
         db.run(`DELETE FROM user_state WHERE updated_at < datetime('now', '-1 day')`);
     });
 }
@@ -1244,17 +1172,14 @@ function setupCleanupCron() {
 // ================================================
 // INICIAR BOT
 // ================================================
-
 async function startBot() {
     try {
         console.log(chalk.cyan(`🚀 Iniciando ${config.bot.name}...`));
 
-        // Configurar cron jobs
         setupPaymentChecker();
         setupExpirationNotifications();
         setupCleanupCron();
 
-        // Iniciar WPPConnect
         client = await wppconnect.create({
             session: 'ssh-bot-hwid',
             puppeteerOptions: {
@@ -1275,18 +1200,20 @@ async function startBot() {
 
         console.log(chalk.green('✅ WhatsApp conectado exitosamente!'));
 
-        // Evento de QR Code
+        // QR CORREGIDO
         client.onQRCode((qrCode) => {
-            console.log(chalk.yellow('📱 Escanea este código QR con WhatsApp:'));
-            qrcode.generate(qrCode, { small: true });
+            console.log(chalk.yellow('\n📱 ESCANEA ESTE CÓDIGO QR CON WHATSAPP:\n'));
+            qrcode.generate(qrCode, { small: true }, function (qrcodeStr) {
+                console.log(qrcodeStr);
+                console.log(chalk.cyan('\n🔗 O usa este enlace (si el QR no aparece):'));
+                console.log(chalk.cyan(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}`));
+            });
         });
 
-        // Evento de autenticación
         client.onAuthenticated(() => {
             console.log(chalk.green('✅ Autenticación completada!'));
         });
 
-        // Evento de mensajes
         client.onMessage(async (message) => {
             try {
                 await handleMessage(message);
@@ -1295,7 +1222,6 @@ async function startBot() {
             }
         });
 
-        // Evento de cambio de estado
         client.onStateChange((state) => {
             console.log(chalk.blue(`🔁 Estado cambiado: ${state}`));
         });
@@ -1311,7 +1237,6 @@ async function startBot() {
     }
 }
 
-// Iniciar
 startBot();
 
 process.on('SIGINT', async () => {
@@ -1323,19 +1248,19 @@ process.on('SIGINT', async () => {
 });
 BOTEOF
 
-# Reemplazar la marca __BOT_NAME__ por el nombre elegido
+# Reemplazar la marca __BOT_NAME__
 sed -i "s|__BOT_NAME__|$BOT_NAME|g" bot.js
 
-echo -e "${GREEN}✅ Bot.js creado con menú completo y sistema HWID${NC}"
+echo -e "${GREEN}✅ Bot.js creado con QR corregido${NC}"
 
 # ================================================
-# CREAR SCRIPT DE CONTROL (PANEL)
+# CREAR PANEL DE CONTROL (COMPLETO)
 # ================================================
 echo -e "\n${CYAN}${BOLD}⚙️ CREANDO PANEL DE CONTROL 'sshbot'...${NC}"
 
 cat > "/usr/local/bin/sshbot" << 'CONTROLEOF'
 #!/bin/bash
-# Panel de control para SSH BOT HWID - Menú completo
+# Panel de control para SSH BOT HWID
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BLUE='\033[0;34m'; PURPLE='\033[0;35m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -1348,15 +1273,8 @@ set_val() { local t=$(mktemp); jq "$1 = $2" "$CONFIG" > "$t" && mv "$t" "$CONFIG
 test_mercadopago() {
     local TOKEN="$1"
     echo -e "${YELLOW}🔄 Probando conexión con MercadoPago...${NC}"
-
-    RESPONSE=$(curl -s -w "\n%{http_code}" \
-        -H "Authorization: Bearer $TOKEN" \
-        "https://api.mercadopago.com/v1/payment_methods" \
-        2>/dev/null)
-
+    RESPONSE=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $TOKEN" "https://api.mercadopago.com/v1/payment_methods" 2>/dev/null)
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-    BODY=$(echo "$RESPONSE" | head -n-1)
-
     if [[ "$HTTP_CODE" == "200" ]]; then
         echo -e "${GREEN}✅ CONEXIÓN EXITOSA${NC}"
         return 0
@@ -1470,7 +1388,6 @@ while true; do
             [[ -z "$DAYS" ]] && DAYS="30"
             [[ -z "$CONN" ]] && CONN="1"
 
-            # Normalizar HWID
             HWID=$(echo "$HWID" | tr 'a-z' 'A-Z')
             if [[ ! "$HWID" =~ ^APP-[A-F0-9]{16}$ ]]; then
                 echo -e "\n${RED}❌ Formato HWID inválido${NC}"
@@ -1664,24 +1581,16 @@ CONTROLEOF
 chmod +x /usr/local/bin/sshbot
 ln -sf /usr/local/bin/sshbot /usr/local/bin/sshbot-control 2>/dev/null || true
 
-echo -e "${GREEN}✅ Panel de control instalado como 'sshbot'${NC}"
-
 # ================================================
-# CONFIGURAR CRON JOBS
+# CONFIGURAR CRON Y PM2
 # ================================================
-echo -e "\n${CYAN}${BOLD}⏰ CONFIGURANDO CRON JOBS...${NC}"
-
-# Asegurar que PM2 se inicie al arrancar
 pm2 startup
 pm2 save
 
-echo -e "${GREEN}✅ Cron jobs configurados${NC}"
-
 # ================================================
-# INICIAR EL BOT
+# INICIAR BOT
 # ================================================
 echo -e "\n${CYAN}${BOLD}🚀 INICIANDO BOT...${NC}"
-
 cd "$USER_HOME"
 pm2 start bot.js --name ssh-bot --time
 pm2 save
@@ -1706,12 +1615,7 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${GREEN}✅ BOT HWID CON MENÚ COMPLETO INSTALADO${NC}"
 echo -e "${GREEN}✅ Nombre del bot: ${CYAN}$BOT_NAME${NC}"
 echo -e "${GREEN}✅ IP del servidor: ${CYAN}$SERVER_IP${NC}"
-echo -e "${GREEN}✅ Sistema HWID: primero nombre, luego HWID${NC}"
-echo -e "${GREEN}✅ Menú principal: 1=Prueba, 2=Planes, 3=Mis HWIDs, 4=Estado, 5=APP, 6=Soporte${NC}"
-echo -e "${GREEN}✅ Menú planes: 7 opciones (1-7) con 1 y 2 conexiones${NC}"
-echo -e "${GREEN}✅ MercadoPago SDK v2.x integrado${NC}"
-echo -e "${GREEN}✅ Notificaciones de vencimiento cada hora${NC}"
-echo -e "${GREEN}✅ Panel de control: ${CYAN}sshbot${NC}"
+echo -e "${GREEN}✅ QR CORREGIDO: ahora se muestra en la terminal${NC}"
 echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}\n"
 
 echo -e "${YELLOW}📋 COMANDOS PRINCIPALES:${NC}\n"
@@ -1720,49 +1624,16 @@ echo -e "  ${GREEN}pm2 logs ssh-bot${NC} - Ver logs y QR del bot"
 echo -e "  ${GREEN}pm2 restart ssh-bot${NC} - Reiniciar el bot"
 echo -e "\n"
 
-echo -e "${YELLOW}📱 FLUJO DEL SISTEMA HWID:${NC}\n"
-echo -e "  1. Usuario paga o pide prueba"
-echo -e "  2. Bot pide: ${CYAN}\"Primero, dime tu nombre\"${NC}"
-echo -e "  3. Usuario envía nombre"
-echo -e "  4. Bot pide: ${CYAN}\"Ahora envía tu HWID\"${NC}"
-echo -e "  5. Usuario envía HWID"
-echo -e "  6. Sistema activa automáticamente"
-echo -e "\n"
+echo -e "${YELLOW}📱 Espera el QR en los logs...${NC}"
+echo -e "${GREEN}Ejecuta: pm2 logs ssh-bot${NC}\n"
 
-echo -e "${YELLOW}⏱️  PRUEBA GRATUITA: ${GREEN}$(get_val '.prices.test_hours') HORAS${NC}\n"
-
-echo -e "${YELLOW}💡 FORMATO HWID VÁLIDO:${NC}"
-echo -e "  APP-E3E4D5CBB7636907"
-echo -e "  APP- + 16 caracteres hexadecimales"
-echo -e "\n"
-
-echo -e "${YELLOW}💰 CONFIGURAR MERCADOPAGO:${NC}\n"
-echo -e "  1. Ve a: https://www.mercadopago.com.ar/developers"
-echo -e "  2. Inicia sesión"
-echo -e "  3. Ve a 'Tus credenciales'"
-echo -e "  4. Copia 'Access Token PRODUCCIÓN'"
-echo -e "  5. En el panel: Opción 7 → Pegar token"
-echo -e "  6. Testear con opción 8"
-echo -e "\n"
-
-echo -e "${YELLOW}⏰ NOTIFICACIONES DE VENCIMIENTO:${NC}"
-echo -e "  • Se envían automáticamente cada hora"
-echo -e "  • Avisan 24 horas antes de vencer"
-echo -e "  • Solo para usuarios premium"
-echo -e "\n"
-
-echo -e "${GREEN}${BOLD}¡Sistema listo! Escanea el QR y envía 'menu' para comenzar 🚀${NC}\n"
-
-read -p "$(echo -e "${YELLOW}¿Ver logs ahora para escanear el QR? (s/N): ${NC}")" -n 1 -r
+read -p "$(echo -e "${YELLOW}¿Ver logs ahora? (s/N): ${NC}")" -n 1 -r
 echo
 if [[ $REPLY =~ ^[Ss]$ ]]; then
     echo -e "\n${CYAN}Mostrando logs...${NC}"
-    echo -e "${YELLOW}📱 Espera el QR para escanear...${NC}\n"
+    echo -e "${YELLOW}📱 Escanea el QR cuando aparezca...${NC}\n"
     sleep 2
     pm2 logs ssh-bot
-else
-    echo -e "\n${YELLOW}💡 Para ver el QR más tarde: ${GREEN}pm2 logs ssh-bot${NC}"
-    echo -e "${YELLOW}💡 Para abrir el panel: ${GREEN}sshbot${NC}\n"
 fi
 
 exit 0
