@@ -97,7 +97,7 @@ apt-get update -y
 apt-get upgrade -y
 
 # 1. Detener y eliminar el bot de PM2
-pm2 delete ssh-bot
+pm2 delete ssh-bot 2>/dev/null || true
 pm2 save
 
 # 2. Matar procesos de Chrome/Chromium
@@ -110,12 +110,11 @@ rm -rf /root/ssh-bot
 rm -rf /root/.wppconnect
 rm -rf /root/.pm2/logs/ssh-bot*
 
-# 4. Opcional: eliminar también tokens de sesión
+# 4. Eliminar también tokens de sesión
 rm -rf /root/ssh-bot/tokens
 
 # 5. Reiniciar PM2
 pm2 kill
-
 # Node.js 18.x
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt-get install -y nodejs gcc g++ make
