@@ -1,7 +1,6 @@
 #!/bin/bash
 # ================================================
-# SSH BOT HWID - MENÚ COMPLETO + SISTEMA HWID
-# Versión FINAL: QR CORREGIDO + AUTO CLOSE DESACTIVADO
+# SSH BOT HWID - MENÚ COMPLETO (basado en mgvpn)
 # ================================================
 
 set -e
@@ -38,7 +37,6 @@ cat << "BANNER"
 ║               🆕 PLANES: 1=7d, 2=15d, 3=30d, 4=7d(2c),      ║
 ║                        5=15d(2c), 6=30d(2c), 7=50d(1c)      ║
 ║               ⏰ NOTIFICACIONES DE VENCIMIENTO              ║
-║               ✅ QR CORREGIDO - AUTO CLOSE DESACTIVADO      ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 BANNER
@@ -47,7 +45,6 @@ echo -e "${NC}"
 # Verificar root
 if [[ $EUID -ne 0 ]]; then
     echo -e "${RED}${BOLD}❌ ERROR: Debes ejecutar como root${NC}"
-    echo -e "${YELLOW}Usa: sudo bash $0${NC}"
     exit 1
 fi
 
@@ -78,13 +75,11 @@ echo ""
 
 # Confirmar instalación
 echo -e "${YELLOW}⚠️  ESTE INSTALADOR HARÁ:${NC}"
-echo -e "   • Instalar Node.js 18.x + Chrome (compatible WPPConnect)"
-echo -e "   • Crear bot con menú completo y sistema HWID"
+echo -e "   • Instalar Node.js 18.x + Chrome"
+echo -e "   • Crear bot con sistema HWID (mgvpn) y menú completo"
 echo -e "   • Configurar MercadoPago SDK v2.x"
 echo -e "   • Activar notificaciones de vencimiento"
 echo -e "   • Instalar panel de control 'sshbot'"
-echo -e "   • Configurar PM2 para auto-inicio"
-echo -e "   • ✅ QR CORREGIDO - Auto Close desactivado"
 echo -e "\n${RED}⚠️  Se eliminarán instalaciones anteriores${NC}"
 
 read -p "$(echo -e "${YELLOW}¿Continuar con la instalación? (s/N): ${NC}")" -n 1 -r
@@ -98,25 +93,20 @@ fi
 # INSTALAR DEPENDENCIAS
 # ================================================
 echo -e "\n${CYAN}${BOLD}📦 INSTALANDO DEPENDENCIAS...${NC}"
-
-# Actualizar sistema
 apt-get update -y
 apt-get upgrade -y
 
-# Instalar Node.js 18.x (ya no debería haber conflicto)
-echo -e "${YELLOW}📦 Instalando Node.js 18.x...${NC}"
+# Node.js 18.x
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt-get install -y nodejs gcc g++ make
 
-# Instalar Chrome/Chromium
-echo -e "${YELLOW}🌐 Instalando Chrome...${NC}"
+# Chrome/Chromium
 wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
 echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
 apt-get update -y
 apt-get install -y google-chrome-stable
 
-# Instalar dependencias del sistema
-echo -e "${YELLOW}⚙️ Instalando utilidades...${NC}"
+# Dependencias del sistema
 apt-get install -y \
     git curl wget sqlite3 jq \
     build-essential libcairo2-dev \
@@ -133,27 +123,24 @@ ufw allow 8001/tcp
 ufw allow 3000/tcp
 ufw --force enable
 
-# Instalar PM2 globalmente
-echo -e "${YELLOW}🔄 Instalando PM2...${NC}"
+# PM2
 npm install -g pm2
 pm2 update
 
 echo -e "${GREEN}✅ Dependencias instaladas${NC}"
 
 # ================================================
-# PREPARAR ESTRUCTURA
+# PREPARAR ESTRUCTURA (basada en mgvpn)
 # ================================================
 echo -e "\n${CYAN}${BOLD}📁 CREANDO ESTRUCTURA...${NC}"
 
-INSTALL_DIR="/opt/ssh-bot"
-USER_HOME="/root/ssh-bot"
+INSTALL_DIR="/opt/sshbot-pro"
+USER_HOME="/root/sshbot-pro"
 DB_FILE="$INSTALL_DIR/data/hwid.db"
 CONFIG_FILE="$INSTALL_DIR/config/config.json"
 
-# Limpiar instalaciones anteriores
-echo -e "${YELLOW}🧹 Limpiando instalaciones anteriores...${NC}"
-pm2 delete ssh-bot 2>/dev/null || true
-pm2 flush 2>/dev/null || true
+# Limpiar anterior
+pm2 delete sshbot-pro 2>/dev/null || true
 rm -rf "$INSTALL_DIR" "$USER_HOME" 2>/dev/null || true
 rm -rf /root/.wppconnect 2>/dev/null || true
 
@@ -164,12 +151,12 @@ mkdir -p /root/.wppconnect
 chmod -R 755 "$INSTALL_DIR"
 chmod -R 700 /root/.wppconnect
 
-# Crear configuración
+# Configuración con precios completos (7 opciones)
 cat > "$CONFIG_FILE" << EOF
 {
     "bot": {
         "name": "$BOT_NAME",
-        "version": "HWID-MENU-COMPLETO",
+        "version": "3.0-HWID-MENU-COMPLETO",
         "server_ip": "$SERVER_IP"
     },
     "prices": {
@@ -201,7 +188,7 @@ cat > "$CONFIG_FILE" << EOF
 }
 EOF
 
-# Crear base de datos
+# Base de datos HWID (mgvpn) con campo max_connections añadido
 sqlite3 "$DB_FILE" << 'SQL'
 CREATE TABLE hwid_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,8 +218,6 @@ CREATE TABLE payments (
     days INTEGER,
     connections INTEGER DEFAULT 1,
     amount REAL,
-    discount_code TEXT,
-    final_amount REAL,
     status TEXT DEFAULT 'pending',
     payment_url TEXT,
     qr_code TEXT,
@@ -266,24 +251,22 @@ CREATE INDEX idx_hwid_users_hwid ON hwid_users(hwid);
 CREATE INDEX idx_hwid_users_status ON hwid_users(status);
 CREATE INDEX idx_payments_hwid ON payments(hwid);
 CREATE INDEX idx_payments_status ON payments(status);
-CREATE INDEX idx_payments_phone ON payments(phone);
-CREATE INDEX idx_payments_preference ON payments(preference_id);
 SQL
 
-echo -e "${GREEN}✅ Base de datos HWID creada${NC}"
+echo -e "${GREEN}✅ Estructura HWID creada${NC}"
 
 # ================================================
-# CREAR BOT CON WPPCONNECT Y SISTEMA HWID (QR CORREGIDO)
+# CREAR BOT CON MENÚ COMPLETO (basado en mgvpn + menú mejorado)
 # ================================================
-echo -e "\n${CYAN}${BOLD}🤖 CREANDO BOT CON SISTEMA HWID Y QR CORREGIDO...${NC}"
+echo -e "\n${CYAN}${BOLD}🤖 CREANDO BOT CON MENÚ COMPLETO Y SISTEMA HWID...${NC}"
 
 cd "$USER_HOME"
 
 # package.json
 cat > package.json << 'PKGEOF'
 {
-    "name": "ssh-bot-hwid",
-    "version": "2.0.0",
+    "name": "sshbot-pro-hwid",
+    "version": "3.0.0",
     "main": "bot.js",
     "dependencies": {
         "@wppconnect-team/wppconnect": "^1.24.0",
@@ -294,19 +277,18 @@ cat > package.json << 'PKGEOF'
         "chalk": "^4.1.2",
         "node-cron": "^3.0.3",
         "mercadopago": "^2.0.15",
-        "axios": "^1.6.5",
-        "sharp": "^0.33.2"
+        "axios": "^1.6.5"
     }
 }
 PKGEOF
 
-echo -e "${YELLOW}📦 Instalando dependencias Node.js...${NC}"
+echo -e "${YELLOW}📦 Instalando dependencias...${NC}"
 npm install --silent 2>&1 | grep -v "npm WARN" || true
 
 # ================================================
-# BOT.JS CON QR CORREGIDO (VERSIÓN COMPLETA Y MEJORADA)
+# BOT.JS: base mgvpn con menú completo (corregido QR)
 # ================================================
-echo -e "${YELLOW}📝 Creando bot.js con QR mejorado y auto close desactivado...${NC}"
+echo -e "${YELLOW}📝 Creando bot.js con menú completo...${NC}"
 
 cat > "bot.js" << 'BOTEOF'
 const wppconnect = require('@wppconnect-team/wppconnect');
@@ -325,22 +307,20 @@ const axios = require('axios');
 const execPromise = util.promisify(exec);
 moment.locale('es');
 
-// Banner de inicio
 console.log(chalk.cyan.bold('\n╔══════════════════════════════════════════════════════════════╗'));
 console.log(chalk.cyan.bold('║              __BOT_NAME__ - HWID + MENÚ COMPLETO             ║'));
 console.log(chalk.cyan.bold('║               SISTEMA: PRIMERO NOMBRE, LUEGO HWID            ║'));
 console.log(chalk.cyan.bold('║               ⏰ NOTIFICACIONES DE VENCIMIENTO                ║'));
-console.log(chalk.cyan.bold('║               ✅ QR MEJORADO - AUTO CLOSE DESACTIVADO        ║'));
 console.log(chalk.cyan.bold('╚══════════════════════════════════════════════════════════════╝\n'));
 
 // Cargar configuración
 function loadConfig() {
-    delete require.cache[require.resolve('/opt/ssh-bot/config/config.json')];
-    return require('/opt/ssh-bot/config/config.json');
+    delete require.cache[require.resolve('/opt/sshbot-pro/config/config.json')];
+    return require('/opt/sshbot-pro/config/config.json');
 }
 
 let config = loadConfig();
-const db = new sqlite3.Database('/opt/ssh-bot/data/hwid.db');
+const db = new sqlite3.Database('/opt/sshbot-pro/data/hwid.db');
 
 // ✅ MERCADOPAGO SDK V2.X
 let mpEnabled = false;
@@ -366,8 +346,6 @@ function initMercadoPago() {
         } catch (error) {
             console.log(chalk.red('❌ Error inicializando MP:'), error.message);
             mpEnabled = false;
-            mpClient = null;
-            mpPreference = null;
             return false;
         }
     }
@@ -379,9 +357,7 @@ initMercadoPago();
 
 let client = null;
 
-// ================================================
-// FUNCIONES HWID
-// ================================================
+// ✅ FUNCIONES HWID (mgvpn)
 function validateHWID(hwid) {
     const hwidRegex = /^APP-[A-F0-9]{16}$/;
     return hwidRegex.test(hwid);
@@ -475,9 +451,7 @@ function registerTest(phone, nombre) {
         [phone, nombre, moment().format('YYYY-MM-DD')]);
 }
 
-// ================================================
-// SISTEMA DE ESTADOS
-// ================================================
+// ✅ SISTEMA DE ESTADOS
 function getUserState(phone) {
     return new Promise((resolve) => {
         db.get('SELECT state, data FROM user_state WHERE phone = ?', [phone], (err, row) => {
@@ -500,77 +474,170 @@ function setUserState(phone, state, data = null) {
             `INSERT OR REPLACE INTO user_state (phone, state, data, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
             [phone, state, dataStr],
             (err) => {
-                resolve(!err);
+                if (err) console.error(chalk.red('❌ Error estado:'), err.message);
+                resolve();
             }
         );
     });
 }
 
-// ================================================
-// FUNCIONES DE PAGO MERCADOPAGO
-// ================================================
+// ✅ FUNCIONES MP (mgvpn)
 async function createMercadoPagoPayment(phone, planName, days, amount, connections = 1) {
-    if (!mpEnabled) {
-        return { success: false, error: 'MercadoPago no configurado' };
-    }
-
     try {
-        const paymentId = `HWID-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
+        if (!mpEnabled || !mpPreference) {
+            return { success: false, error: 'MercadoPago no configurado' };
+        }
+
+        const phoneClean = phone.replace('@c.us', '');
+        const paymentId = `HWID-${phoneClean}-${days}d-${Date.now()}`;
+
+        const expirationDate = moment().add(24, 'hours');
+        const isoDate = expirationDate.toISOString();
+
         const preferenceData = {
-            items: [
-                {
-                    title: `${config.bot.name} - ${planName}`,
-                    description: `HWID Premium ${days} días - ${connections} conexión(es)`,
-                    quantity: 1,
-                    currency_id: config.prices.currency || 'ARS',
-                    unit_price: parseFloat(amount)
-                }
-            ],
-            payer: {
-                phone: { number: phone.replace('+', '') }
-            },
-            payment_methods: {
-                excluded_payment_types: [{ id: 'atm' }],
-                installments: 1
-            },
-            notification_url: `http://${config.bot.server_ip}:3000/webhook/mp`,
+            items: [{
+                title: `${config.bot.name} - ${planName}`,
+                description: `Activación HWID SSH por ${days} días - ${connections} conexión(es)`,
+                quantity: 1,
+                currency_id: config.prices.currency || 'ARS',
+                unit_price: parseFloat(amount)
+            }],
             external_reference: paymentId,
+            expires: true,
+            expiration_date_from: moment().toISOString(),
+            expiration_date_to: isoDate,
             back_urls: {
-                success: `https://wa.me/${phone}?text=Pago+aprobado+${paymentId}`,
-                pending: `https://wa.me/${phone}?text=Pago+pendiente+${paymentId}`,
-                failure: `https://wa.me/${phone}?text=Pago+rechazado+${paymentId}`
+                success: `https://wa.me/${phoneClean}?text=Ya%20pague%20hwid`,
+                failure: `https://wa.me/${phoneClean}?text=Pago%20fallido%20hwid`,
+                pending: `https://wa.me/${phoneClean}?text=Pago%20pendiente%20hwid`
             },
-            auto_return: 'approved'
+            auto_return: 'approved',
+            statement_descriptor: 'HWID SSH'
         };
 
-        const preference = await mpPreference.create({ body: preferenceData });
+        const response = await mpPreference.create({ body: preferenceData });
 
-        const qrPath = path.join(config.paths.qr_codes, `${paymentId}.png`);
-        await QRCode.toFile(qrPath, preference.init_point);
+        if (response && response.id) {
+            const paymentUrl = response.init_point;
+            const qrPath = `${config.paths.qr_codes}/${paymentId}.png`;
 
-        db.run(
-            `INSERT INTO payments (payment_id, phone, plan, days, connections, amount, status, payment_url, qr_code, preference_id) 
-             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
-            [paymentId, phone, planName, days, connections, amount, preference.init_point, qrPath, preference.id]
-        );
+            await QRCode.toFile(qrPath, paymentUrl, { width: 400, margin: 2 });
 
-        return {
-            success: true,
-            paymentId,
-            paymentUrl: preference.init_point,
-            qrCode: qrPath,
-            preferenceId: preference.id,
-            amount: amount
-        };
+            db.run(
+                `INSERT INTO payments (payment_id, phone, plan, days, connections, amount, status, payment_url, qr_code, preference_id) 
+                 VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+                [paymentId, phone, planName, days, connections, amount, paymentUrl, qrPath, response.id]
+            );
+
+            return { 
+                success: true, 
+                paymentId, 
+                paymentUrl, 
+                qrPath,
+                amount: parseFloat(amount)
+            };
+        }
+
+        throw new Error('Respuesta inválida de MercadoPago');
+
     } catch (error) {
-        console.error('Error creando pago MP:', error);
+        console.error(chalk.red('❌ Error MercadoPago:'), error.message);
         return { success: false, error: error.message };
     }
 }
 
+// ✅ VERIFICAR PAGOS PENDIENTES
+async function checkPendingPayments() {
+    if (!mpEnabled) return;
+
+    db.all('SELECT * FROM payments WHERE status = "pending" AND created_at > datetime("now", "-48 hours")', 
+        async (err, payments) => {
+        if (err || !payments || payments.length === 0) return;
+
+        for (const payment of payments) {
+            try {
+                const url = `https://api.mercadopago.com/v1/payments/search?external_reference=${payment.payment_id}`;
+                const response = await axios.get(url, {
+                    headers: { 
+                        'Authorization': `Bearer ${config.mercadopago.access_token}`
+                    },
+                    timeout: 15000
+                });
+
+                if (response.data && response.data.results && response.data.results.length > 0) {
+                    const mpPayment = response.data.results[0];
+
+                    if (mpPayment.status === 'approved') {
+                        console.log(chalk.green(`✅ PAGO APROBADO: ${payment.payment_id}`));
+
+                        db.run(`UPDATE payments SET status = 'approved', approved_at = CURRENT_TIMESTAMP WHERE payment_id = ?`, 
+                            [payment.payment_id]);
+
+                        if (client) {
+                            await client.sendText(payment.phone, 
+                                `*✅ PAGO CONFIRMADO*
+
+Tu pago ha sido aprobado.
+
+*📝 PRIMERO, ESCRIBE TU NOMBRE:*
+Para continuar con la activación, dime tu nombre.`);
+
+                            await setUserState(payment.phone, 'awaiting_payment_nombre', { 
+                                payment_id: payment.payment_id,
+                                planData: {
+                                    days: payment.days,
+                                    connections: payment.connections,
+                                    name: payment.plan
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(chalk.red(`❌ Error verificando ${payment.payment_id}:`), error.message);
+            }
+        }
+    });
+}
+
+// ✅ NOTIFICACIONES DE VENCIMIENTO
+async function checkExpiringHWIDs() {
+    try {
+        const expiringSoon = await new Promise((resolve, reject) => {
+            db.all(`
+                SELECT * FROM hwid_users 
+                WHERE status = 1 
+                AND expires_at > datetime('now') 
+                AND expires_at < datetime('now', '+1 day')
+                AND tipo = 'premium'
+            `, (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+
+        for (const hwid of expiringSoon) {
+            const hoursLeft = moment(hwid.expires_at).diff(moment(), 'hours');
+            const message = `⏰ *RECORDATORIO DE VENCIMIENTO*
+
+Hola *${hwid.nombre}*, tu acceso expirará en aproximadamente *${hoursLeft} horas*.
+
+🔐 *HWID:* ${hwid.hwid}
+⏰ *Fecha de vencimiento:* ${moment(hwid.expires_at).format('DD/MM/YYYY HH:mm')}
+
+💰 Para renovar, escribe *menu* y elige *2* (Planes).`;
+
+            if (client) {
+                await client.sendText(hwid.phone, message);
+            }
+        }
+    } catch (error) {
+        console.error(chalk.red('❌ Error en notificaciones de vencimiento:'), error.message);
+    }
+}
+
 // ================================================
-// MENSAJES DEL SISTEMA
+// MENSAJES DEL MENÚ COMPLETO
 // ================================================
 function getMainMenuMessage() {
     return `*🤖 ${config.bot.name}*
@@ -618,52 +685,57 @@ function getPlanDetails(planNumber) {
 }
 
 // ================================================
-// MANEJADOR PRINCIPAL DE MENSAJES
+// MANEJADORES DE MENSAJES (basado en mgvpn + menú nuevo)
 // ================================================
 async function handleMessage(message) {
-    const phone = message.from.replace('@c.us', '');
-    const text = message.body || '';
-    const userState = await getUserState(phone);
+    try {
+        const text = message.body.toLowerCase().trim();
+        const from = message.from;
+        const phone = from.replace('@c.us', '');
 
-    console.log(chalk.blue(`📱 ${phone}: ${text} (Estado: ${userState.state})`));
+        console.log(chalk.cyan(`📩 [${from}]: ${text.substring(0, 30)}`));
 
-    if (text.toLowerCase() === 'menu' || text === '0') {
-        await setUserState(phone, 'main_menu');
-        await client.sendText(message.from, getMainMenuMessage());
-        return;
-    }
+        const userState = await getUserState(phone);
 
-    switch (userState.state) {
-        case 'main_menu':
-            await handleMainMenu(phone, text, message.from);
-            break;
-        case 'plans_menu':
-            await handlePlansMenu(phone, text, message.from);
-            break;
-        case 'buying_plan':
-            await handleBuyingPlan(phone, text, message.from, userState.data);
-            break;
-        case 'awaiting_test_nombre':
-            await handleTestNombre(phone, text, message.from);
-            break;
-        case 'awaiting_test_hwid':
-            await handleTestHWID(phone, text, message.from, userState.data);
-            break;
-        case 'awaiting_payment_nombre':
-            await handlePaymentNombre(phone, text, message.from, userState.data);
-            break;
-        case 'awaiting_payment_hwid':
-            await handlePaymentHWID(phone, text, message.from, userState.data);
-            break;
-        default:
+        // Comando menu/volver
+        if (['menu', 'hola', 'start', 'hi', 'volver', '0'].includes(text)) {
             await setUserState(phone, 'main_menu');
-            await client.sendText(message.from, getMainMenuMessage());
+            await client.sendText(from, getMainMenuMessage());
+            return;
+        }
+
+        // Estados
+        switch (userState.state) {
+            case 'main_menu':
+                await handleMainMenu(phone, text, from);
+                break;
+            case 'plans_menu':
+                await handlePlansMenu(phone, text, from);
+                break;
+            case 'buying_plan':
+                await handleBuyingPlan(phone, text, from, userState.data);
+                break;
+            case 'awaiting_test_nombre':
+                await handleTestNombre(phone, text, from);
+                break;
+            case 'awaiting_test_hwid':
+                await handleTestHWID(phone, text, from, userState.data);
+                break;
+            case 'awaiting_payment_nombre':
+                await handlePaymentNombre(phone, text, from, userState.data);
+                break;
+            case 'awaiting_payment_hwid':
+                await handlePaymentHWID(phone, text, from, userState.data);
+                break;
+            default:
+                await setUserState(phone, 'main_menu');
+                await client.sendText(from, getMainMenuMessage());
+        }
+    } catch (error) {
+        console.error(chalk.red('❌ Error procesando mensaje:'), error.message);
     }
 }
 
-// ================================================
-// MANEJADORES POR ESTADO (COMPLETOS)
-// ================================================
 async function handleMainMenu(phone, text, from) {
     switch (text) {
         case '1': // Prueba gratis
@@ -1056,163 +1128,76 @@ Para comprar un plan escribe *menu* y elige la opción *2*.`);
 // ================================================
 // CRON JOBS
 // ================================================
-function setupPaymentChecker() {
-    cron.schedule('*/2 * * * *', async () => {
-        if (!mpEnabled) return;
-
+function setupCronJobs() {
+    // Verificar pagos cada 2 minutos
+    cron.schedule('*/2 * * * *', () => {
         console.log(chalk.yellow('🔍 Verificando pagos pendientes...'));
-
-        db.all(
-            `SELECT payment_id, preference_id, phone, plan, days, connections, amount 
-             FROM payments 
-             WHERE status = 'pending' AND created_at > datetime('now', '-2 days')`,
-            [],
-            async (err, payments) => {
-                if (err || !payments) return;
-
-                for (const payment of payments) {
-                    try {
-                        const url = `https://api.mercadopago.com/v1/payments/search?external_reference=${payment.payment_id}`;
-                        const response = await axios.get(url, {
-                            headers: { 
-                                'Authorization': `Bearer ${config.mercadopago.access_token}`
-                            },
-                            timeout: 15000
-                        });
-
-                        if (response.data && response.data.results && response.data.results.length > 0) {
-                            const mpPayment = response.data.results[0];
-
-                            if (mpPayment.status === 'approved') {
-                                console.log(chalk.green(`✅ PAGO APROBADO: ${payment.payment_id}`));
-
-                                db.run(`UPDATE payments SET status = 'approved', approved_at = CURRENT_TIMESTAMP WHERE payment_id = ?`, 
-                                    [payment.payment_id]);
-
-                                if (client) {
-                                    await client.sendText(
-                                        payment.phone,
-                                        `*✅ PAGO CONFIRMADO*
-
-Tu pago ha sido aprobado.
-
-*📝 PRIMERO, ESCRIBE TU NOMBRE:*
-Para continuar con la activación, dime tu nombre.`
-                                    );
-
-                                    await setUserState(payment.phone, 'awaiting_payment_nombre', { 
-                                        paymentId: payment.payment_id,
-                                        planData: {
-                                            days: payment.days,
-                                            connections: payment.connections,
-                                            name: payment.plan
-                                        }
-                                    });
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.error(chalk.red(`❌ Error verificando ${payment.payment_id}:`), error.message);
-                    }
-                }
-            }
-        );
+        checkPendingPayments();
     });
-}
 
-function setupExpirationNotifications() {
-    cron.schedule('0 * * * *', async () => {
+    // Notificaciones de vencimiento cada hora
+    cron.schedule('0 * * * *', () => {
         console.log(chalk.yellow('⏰ Verificando HWIDs próximos a vencer...'));
-
-        try {
-            const expiringSoon = await new Promise((resolve, reject) => {
-                db.all(`
-                    SELECT * FROM hwid_users 
-                    WHERE status = 1 
-                    AND expires_at > datetime('now') 
-                    AND expires_at < datetime('now', '+1 day')
-                    AND tipo = 'premium'
-                `, (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows || []);
-                });
-            });
-
-            for (const hwid of expiringSoon) {
-                const hoursLeft = moment(hwid.expires_at).diff(moment(), 'hours');
-                const message = `⏰ *RECORDATORIO DE VENCIMIENTO*
-
-Hola *${hwid.nombre}*, tu acceso expirará en aproximadamente *${hoursLeft} horas*.
-
-🔐 *HWID:* ${hwid.hwid}
-⏰ *Fecha de vencimiento:* ${moment(hwid.expires_at).format('DD/MM/YYYY HH:mm')}
-
-💰 Para renovar, escribe *menu* y elige *2* (Planes).`;
-
-                if (client) {
-                    await client.sendText(hwid.phone, message);
-                    console.log(chalk.yellow(`📨 Notificación enviada a ${hwid.nombre}`));
-                }
-            }
-        } catch (error) {
-            console.error(chalk.red('❌ Error en notificaciones de vencimiento:'), error.message);
-        }
+        checkExpiringHWIDs();
     });
-}
 
-function setupCleanupCron() {
+    // Limpiar HWIDs expirados cada 15 minutos
     cron.schedule('*/15 * * * *', async () => {
-        console.log(chalk.yellow('🧹 Limpiando HWIDs expirados...'));
-
         const now = moment().format('YYYY-MM-DD HH:mm:ss');
+        console.log(chalk.yellow('🧹 Limpiando HWIDs expirados...'));
         db.run('UPDATE hwid_users SET status = 0 WHERE expires_at < ? AND status = 1', [now]);
-        db.run(`DELETE FROM user_state WHERE updated_at < datetime('now', '-1 day')`);
+    });
+
+    // Limpiar estados antiguos cada hora
+    cron.schedule('0 * * * *', () => {
+        db.run(`DELETE FROM user_state WHERE updated_at < datetime('now', '-1 hour')`);
     });
 }
 
 // ================================================
-// INICIAR BOT (VERSIÓN MEJORADA CON QR)
+// INICIAR BOT
 // ================================================
 async function startBot() {
     try {
         console.log(chalk.cyan(`🚀 Iniciando ${config.bot.name}...`));
 
-        setupPaymentChecker();
-        setupExpirationNotifications();
-        setupCleanupCron();
+        setupCronJobs();
 
         client = await wppconnect.create({
-            session: 'ssh-bot-hwid',
+            session: 'sshbot-pro-hwid',
+            headless: true,
+            devtools: false,
+            useChrome: true,
+            debug: false,
+            logQR: true,
+            autoClose: 0, // Desactivar cierre automático
+            browserWS: '',
+            browserArgs: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
+                '--window-size=1920,1080'
+            ],
             puppeteerOptions: {
-                executablePath: config.paths.chromium,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu'
-                ]
+                executablePath: config.paths.chromium || '/usr/bin/google-chrome',
+                headless: 'new',
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
             },
-            // IMPORTANTE: Desactivamos el cierre automático y activamos logQR
-            autoClose: 0, // 0 = desactivado
-            logQR: true,   // La librería mostrará el QR automáticamente
-            disableWelcome: true
+            disableWelcome: true,
+            updatesLog: false,
+            folderNameToken: '/root/.wppconnect'
         });
 
         console.log(chalk.green('✅ WhatsApp conectado exitosamente!'));
 
-        // Manejador de QR adicional por si acaso (redundante, pero seguro)
+        // QR Code handler
         client.onQRCode((qrCode) => {
             console.log(chalk.yellow('\n📱 ESCANEA ESTE CÓDIGO QR CON WHATSAPP:\n'));
-            
-            // Intentar con qrcode-terminal
-            qrcode.generate(qrCode, { small: true }, function (qrcodeStr) {
-                console.log(qrcodeStr);
-            });
-
-            // También mostrar un enlace directo
+            qrcode.generate(qrCode, { small: true });
             console.log(chalk.cyan('\n🔗 O usa este enlace (si el QR no aparece):'));
             console.log(chalk.cyan(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}`));
         });
@@ -1221,17 +1206,11 @@ async function startBot() {
             console.log(chalk.green('✅ Autenticación completada!'));
         });
 
-        client.onMessage(async (message) => {
-            try {
-                await handleMessage(message);
-            } catch (error) {
-                console.error('Error manejando mensaje:', error);
-            }
+        client.onStateChange((state) => {
+            console.log(chalk.blue(`🔁 Estado: ${state}`));
         });
 
-        client.onStateChange((state) => {
-            console.log(chalk.blue(`🔁 Estado cambiado: ${state}`));
-        });
+        client.onMessage(handleMessage);
 
         console.log(chalk.green.bold('\n✅ BOT INICIADO CORRECTAMENTE!'));
         console.log(chalk.cyan('📱 Escanea el código QR con WhatsApp Web'));
@@ -1258,21 +1237,19 @@ BOTEOF
 # Reemplazar la marca __BOT_NAME__
 sed -i "s|__BOT_NAME__|$BOT_NAME|g" bot.js
 
-echo -e "${GREEN}✅ Bot.js creado con QR mejorado y auto close desactivado${NC}"
+echo -e "${GREEN}✅ Bot.js creado con menú completo y sistema HWID${NC}"
 
 # ================================================
-# CREAR PANEL DE CONTROL (COMPLETO)
+# CREAR PANEL DE CONTROL (sshbot)
 # ================================================
-echo -e "\n${CYAN}${BOLD}⚙️ CREANDO PANEL DE CONTROL 'sshbot'...${NC}"
+echo -e "\n${CYAN}${BOLD}⚙️ CREANDO PANEL DE CONTROL...${NC}"
 
 cat > "/usr/local/bin/sshbot" << 'CONTROLEOF'
 #!/bin/bash
-# Panel de control para SSH BOT HWID
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BLUE='\033[0;34m'; PURPLE='\033[0;35m'; NC='\033[0m'
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BLUE='\033[0;34m'; PURPLE='\033[0;35m'; BOLD='\033[1m'; NC='\033[0m'
-
-DB="/opt/ssh-bot/data/hwid.db"
-CONFIG="/opt/ssh-bot/config/config.json"
+DB="/opt/sshbot-pro/data/hwid.db"
+CONFIG="/opt/sshbot-pro/config/config.json"
 
 get_val() { jq -r "$1" "$CONFIG" 2>/dev/null; }
 set_val() { local t=$(mktemp); jq "$1 = $2" "$CONFIG" > "$t" && mv "$t" "$CONFIG"; }
@@ -1297,8 +1274,6 @@ show_header() {
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║           🎛️  PANEL SSH BOT - VERSIÓN HWID                 ║${NC}"
     echo -e "${CYAN}║           🤖 ${BOT_NAME}                                    ║${NC}"
-    echo -e "${CYAN}║              📱 PRIMERO NOMBRE, LUEGO HWID                  ║${NC}"
-    echo -e "${CYAN}║              ⏰ NOTIFICACIONES DE VENCIMIENTO               ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}\n"
 }
 
@@ -1311,7 +1286,7 @@ while true; do
     APPROVED_PAYMENTS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM payments WHERE status='approved'" 2>/dev/null || echo "0")
     TESTS_TODAY=$(sqlite3 "$DB" "SELECT COUNT(*) FROM daily_tests WHERE date = date('now')" 2>/dev/null || echo "0")
 
-    STATUS=$(pm2 jlist 2>/dev/null | jq -r '.[] | select(.name=="ssh-bot") | .pm2_env.status' 2>/dev/null || echo "stopped")
+    STATUS=$(pm2 jlist 2>/dev/null | jq -r '.[] | select(.name=="sshbot-pro") | .pm2_env.status' 2>/dev/null || echo "stopped")
     if [[ "$STATUS" == "online" ]]; then
         BOT_STATUS="${GREEN}● ACTIVO${NC}"
     else
@@ -1365,21 +1340,21 @@ while true; do
     case $OPTION in
         1)
             echo -e "\n${YELLOW}🔄 Reiniciando...${NC}"
-            cd /root/ssh-bot
-            pm2 restart ssh-bot 2>/dev/null || pm2 start bot.js --name ssh-bot --time
+            cd /root/sshbot-pro
+            pm2 restart sshbot-pro 2>/dev/null || pm2 start bot.js --name sshbot-pro
             pm2 save
             echo -e "${GREEN}✅ Bot reiniciado${NC}"
             sleep 2
             ;;
         2)
             echo -e "\n${YELLOW}🛑 Deteniendo...${NC}"
-            pm2 stop ssh-bot
+            pm2 stop sshbot-pro
             echo -e "${GREEN}✅ Bot detenido${NC}"
             sleep 2
             ;;
         3)
             echo -e "\n${YELLOW}📱 Mostrando logs...${NC}"
-            pm2 logs ssh-bot --lines 100
+            pm2 logs sshbot-pro --lines 100
             ;;
         4)
             clear
@@ -1494,7 +1469,7 @@ while true; do
                     set_val '.mercadopago.enabled' "true"
                     echo -e "\n${GREEN}✅ Token configurado${NC}"
                     echo -e "${YELLOW}🔄 Reiniciando bot...${NC}"
-                    cd /root/ssh-bot && pm2 restart ssh-bot
+                    cd /root/sshbot-pro && pm2 restart sshbot-pro
                     sleep 2
                     echo -e "${GREEN}✅ MercadoPago activado${NC}"
                 else
@@ -1538,7 +1513,7 @@ while true; do
             ;;
         10)
             echo -e "\n${YELLOW}🧹 Limpiando sesión WhatsApp...${NC}"
-            pm2 stop ssh-bot
+            pm2 stop sshbot-pro
             rm -rf /root/.wppconnect/*
             echo -e "${GREEN}✅ Sesión limpiada. Reinicia el bot para generar nuevo QR.${NC}"
             sleep 2
@@ -1599,7 +1574,7 @@ pm2 save
 # ================================================
 echo -e "\n${CYAN}${BOLD}🚀 INICIANDO BOT...${NC}"
 cd "$USER_HOME"
-pm2 start bot.js --name ssh-bot --time
+pm2 start bot.js --name sshbot-pro --time
 pm2 save
 
 sleep 3
@@ -1622,18 +1597,14 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${GREEN}✅ BOT HWID CON MENÚ COMPLETO INSTALADO${NC}"
 echo -e "${GREEN}✅ Nombre del bot: ${CYAN}$BOT_NAME${NC}"
 echo -e "${GREEN}✅ IP del servidor: ${CYAN}$SERVER_IP${NC}"
-echo -e "${GREEN}✅ QR CORREGIDO: ahora se muestra en la terminal${NC}"
-echo -e "${GREEN}✅ Auto Close desactivado: el bot esperará el QR sin límite de tiempo${NC}"
+echo -e "${GREEN}✅ QR CORREGIDO - Auto Close desactivado${NC}"
 echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}\n"
 
 echo -e "${YELLOW}📋 COMANDOS PRINCIPALES:${NC}\n"
 echo -e "  ${GREEN}sshbot${NC}         - Panel de control completo"
-echo -e "  ${GREEN}pm2 logs ssh-bot${NC} - Ver logs y QR del bot"
-echo -e "  ${GREEN}pm2 restart ssh-bot${NC} - Reiniciar el bot"
+echo -e "  ${GREEN}pm2 logs sshbot-pro${NC} - Ver logs y QR del bot"
+echo -e "  ${GREEN}pm2 restart sshbot-pro${NC} - Reiniciar el bot"
 echo -e "\n"
-
-echo -e "${YELLOW}📱 Espera el QR en los logs...${NC}"
-echo -e "${GREEN}Ejecuta: pm2 logs ssh-bot${NC}\n"
 
 read -p "$(echo -e "${YELLOW}¿Ver logs ahora? (s/N): ${NC}")" -n 1 -r
 echo
@@ -1641,7 +1612,7 @@ if [[ $REPLY =~ ^[Ss]$ ]]; then
     echo -e "\n${CYAN}Mostrando logs...${NC}"
     echo -e "${YELLOW}📱 Escanea el QR cuando aparezca...${NC}\n"
     sleep 2
-    pm2 logs ssh-bot
+    pm2 logs sshbot-pro
 fi
 
 exit 0
