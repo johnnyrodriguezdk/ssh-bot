@@ -1,6 +1,7 @@
 #!/bin/bash
 # ================================================
 # SSH BOT HWID - MENÚ COMPLETO (basado en mgvpn)
+# Versión modificada: tolera error de PM2 si el proceso no existe
 # ================================================
 
 set -e
@@ -37,6 +38,7 @@ cat << "BANNER"
 ║               🆕 PLANES: 1=7d, 2=15d, 3=30d, 4=7d(2c),      ║
 ║                        5=15d(2c), 6=30d(2c), 7=50d(1c)      ║
 ║               ⏰ NOTIFICACIONES DE VENCIMIENTO              ║
+║               ✅ QR CORREGIDO - AUTO CLOSE DESACTIVADO      ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 BANNER
@@ -96,7 +98,7 @@ echo -e "\n${CYAN}${BOLD}📦 INSTALANDO DEPENDENCIAS...${NC}"
 apt-get update -y
 apt-get upgrade -y
 
-# 1. Detener y eliminar el bot de PM2
+# 1. Detener y eliminar el bot de PM2 (ignorar si no existe)
 pm2 delete ssh-bot 2>/dev/null || true
 pm2 save
 
@@ -110,11 +112,12 @@ rm -rf /root/ssh-bot
 rm -rf /root/.wppconnect
 rm -rf /root/.pm2/logs/ssh-bot*
 
-# 4. Eliminar también tokens de sesión
+# 4. Opcional: eliminar también tokens de sesión
 rm -rf /root/ssh-bot/tokens
 
 # 5. Reiniciar PM2
 pm2 kill
+
 # Node.js 18.x
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt-get install -y nodejs gcc g++ make
@@ -885,7 +888,7 @@ Escribe *menu* para volver.`);
 
 async function handleFreeTestStart(phone, from) {
     const canTest = await canCreateTest(phone);
-    
+
     if (!canTest) {
         await client.sendText(from, `❌ *YA USASTE TU PRUEBA HOY*
 
