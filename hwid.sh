@@ -1,7 +1,7 @@
 #!/bin/bash
 # ================================================
 # SSH BOT HWID - MENÚ COMPLETO + SISTEMA HWID
-# Versión corregida: muestra QR correctamente
+# Versión FINAL: QR CORREGIDO + AUTO CLOSE DESACTIVADO
 # ================================================
 
 set -e
@@ -38,7 +38,7 @@ cat << "BANNER"
 ║               🆕 PLANES: 1=7d, 2=15d, 3=30d, 4=7d(2c),      ║
 ║                        5=15d(2c), 6=30d(2c), 7=50d(1c)      ║
 ║               ⏰ NOTIFICACIONES DE VENCIMIENTO              ║
-║               ✅ QR CORREGIDO: SE MUESTRA EN TERMINAL       ║
+║               ✅ QR CORREGIDO - AUTO CLOSE DESACTIVADO      ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 BANNER
@@ -84,6 +84,7 @@ echo -e "   • Configurar MercadoPago SDK v2.x"
 echo -e "   • Activar notificaciones de vencimiento"
 echo -e "   • Instalar panel de control 'sshbot'"
 echo -e "   • Configurar PM2 para auto-inicio"
+echo -e "   • ✅ QR CORREGIDO - Auto Close desactivado"
 echo -e "\n${RED}⚠️  Se eliminarán instalaciones anteriores${NC}"
 
 read -p "$(echo -e "${YELLOW}¿Continuar con la instalación? (s/N): ${NC}")" -n 1 -r
@@ -303,9 +304,9 @@ echo -e "${YELLOW}📦 Instalando dependencias Node.js...${NC}"
 npm install --silent 2>&1 | grep -v "npm WARN" || true
 
 # ================================================
-# BOT.JS CON QR CORREGIDO (VERSIÓN COMPLETA)
+# BOT.JS CON QR CORREGIDO (VERSIÓN COMPLETA Y MEJORADA)
 # ================================================
-echo -e "${YELLOW}📝 Creando bot.js con QR corregido...${NC}"
+echo -e "${YELLOW}📝 Creando bot.js con QR mejorado y auto close desactivado...${NC}"
 
 cat > "bot.js" << 'BOTEOF'
 const wppconnect = require('@wppconnect-team/wppconnect');
@@ -329,7 +330,7 @@ console.log(chalk.cyan.bold('\n╔═══════════════�
 console.log(chalk.cyan.bold('║              __BOT_NAME__ - HWID + MENÚ COMPLETO             ║'));
 console.log(chalk.cyan.bold('║               SISTEMA: PRIMERO NOMBRE, LUEGO HWID            ║'));
 console.log(chalk.cyan.bold('║               ⏰ NOTIFICACIONES DE VENCIMIENTO                ║'));
-console.log(chalk.cyan.bold('║               ✅ QR CORREGIDO: SE MUESTRA CORRECTAMENTE      ║'));
+console.log(chalk.cyan.bold('║               ✅ QR MEJORADO - AUTO CLOSE DESACTIVADO        ║'));
 console.log(chalk.cyan.bold('╚══════════════════════════════════════════════════════════════╝\n'));
 
 // Cargar configuración
@@ -1170,7 +1171,7 @@ function setupCleanupCron() {
 }
 
 // ================================================
-// INICIAR BOT
+// INICIAR BOT (VERSIÓN MEJORADA CON QR)
 // ================================================
 async function startBot() {
     try {
@@ -1194,20 +1195,26 @@ async function startBot() {
                     '--disable-gpu'
                 ]
             },
-            disableWelcome: true,
-            logQR: false
+            // IMPORTANTE: Desactivamos el cierre automático y activamos logQR
+            autoClose: 0, // 0 = desactivado
+            logQR: true,   // La librería mostrará el QR automáticamente
+            disableWelcome: true
         });
 
         console.log(chalk.green('✅ WhatsApp conectado exitosamente!'));
 
-        // QR CORREGIDO
+        // Manejador de QR adicional por si acaso (redundante, pero seguro)
         client.onQRCode((qrCode) => {
             console.log(chalk.yellow('\n📱 ESCANEA ESTE CÓDIGO QR CON WHATSAPP:\n'));
+            
+            // Intentar con qrcode-terminal
             qrcode.generate(qrCode, { small: true }, function (qrcodeStr) {
                 console.log(qrcodeStr);
-                console.log(chalk.cyan('\n🔗 O usa este enlace (si el QR no aparece):'));
-                console.log(chalk.cyan(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}`));
             });
+
+            // También mostrar un enlace directo
+            console.log(chalk.cyan('\n🔗 O usa este enlace (si el QR no aparece):'));
+            console.log(chalk.cyan(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}`));
         });
 
         client.onAuthenticated(() => {
@@ -1251,7 +1258,7 @@ BOTEOF
 # Reemplazar la marca __BOT_NAME__
 sed -i "s|__BOT_NAME__|$BOT_NAME|g" bot.js
 
-echo -e "${GREEN}✅ Bot.js creado con QR corregido${NC}"
+echo -e "${GREEN}✅ Bot.js creado con QR mejorado y auto close desactivado${NC}"
 
 # ================================================
 # CREAR PANEL DE CONTROL (COMPLETO)
@@ -1616,6 +1623,7 @@ echo -e "${GREEN}✅ BOT HWID CON MENÚ COMPLETO INSTALADO${NC}"
 echo -e "${GREEN}✅ Nombre del bot: ${CYAN}$BOT_NAME${NC}"
 echo -e "${GREEN}✅ IP del servidor: ${CYAN}$SERVER_IP${NC}"
 echo -e "${GREEN}✅ QR CORREGIDO: ahora se muestra en la terminal${NC}"
+echo -e "${GREEN}✅ Auto Close desactivado: el bot esperará el QR sin límite de tiempo${NC}"
 echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}\n"
 
 echo -e "${YELLOW}📋 COMANDOS PRINCIPALES:${NC}\n"
